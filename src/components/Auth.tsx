@@ -38,10 +38,10 @@ export function Auth() {
               <LogIn className="w-8 h-8 text-white" />
             </div>
             <h1 className="text-3xl font-bold text-slate-900 mb-2">
-              Gestor de Orçamentos
+              Gestor de Orçamentos ArsolUp
             </h1>
             <p className="text-slate-600">
-              Gerencie seus orçamentos de engenharia
+              Gerencie seus orçamentos de engenharia e Aquecimento Solar
             </p>
           </div>
 
