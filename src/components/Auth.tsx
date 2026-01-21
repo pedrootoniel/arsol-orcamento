@@ -10,60 +10,97 @@ export function Auth() {
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
+  const [document, setDocument] = useState('');
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
   const [isSignUp, setIsSignUp] = useState(false);
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError('');
+    setSuccess('');
 
     try {
       if (isSignUp) {
+        const { data: existingUsers } = await supabase
+          .from('profiles')
+          .select('id')
+          .limit(1);
+
         const { data, error } = await supabase.auth.signUp({
           email,
           password,
           options: {
-            data: {
-              full_name: fullName,
-              phone: phone,
-            },
+            emailRedirectTo: undefined,
           },
         });
 
-        if (error) throw error;
+        if (error) {
+          if (error.message.includes('already registered')) {
+            throw new Error('Este email já está cadastrado. Faça login ou use outro email.');
+          }
+          throw error;
+        }
 
         if (data.user) {
-          await supabase.from('profiles').insert({
-            id: data.user.id,
-            role: 'client',
-            full_name: fullName,
-            phone: phone,
-          });
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('id')
+            .eq('id', data.user.id)
+            .maybeSingle();
 
-          const { data: adminUser } = await supabase.auth.admin.listUsers();
-          const admin = adminUser?.users.find(u => u.email?.toLowerCase() === ADMIN_EMAIL.toLowerCase());
-
-          if (admin) {
-            await supabase.from('clients').insert({
-              admin_id: admin.id,
-              user_id: data.user.id,
-              name: fullName,
-              document: '',
-              email: email,
+          if (!profile) {
+            const { error: profileError } = await supabase.from('profiles').insert({
+              id: data.user.id,
+              role: 'client',
+              full_name: fullName,
               phone: phone,
-              address: '',
-              client_type: 'residential',
-              is_active: true,
             });
+
+            if (profileError) throw profileError;
           }
 
-          setError('Conta criada com sucesso! Você pode fazer login agora.');
-          setIsSignUp(false);
-          setEmail('');
-          setPassword('');
-          setFullName('');
-          setPhone('');
+          const { data: adminProfile } = await supabase
+            .from('profiles')
+            .select('id')
+            .eq('role', 'admin')
+            .maybeSingle();
+
+          if (adminProfile) {
+            const { data: existingClient } = await supabase
+              .from('clients')
+              .select('id')
+              .eq('user_id', data.user.id)
+              .maybeSingle();
+
+            if (!existingClient) {
+              const { error: clientError } = await supabase.from('clients').insert({
+                admin_id: adminProfile.id,
+                user_id: data.user.id,
+                name: fullName,
+                document: document,
+                email: email,
+                phone: phone,
+                address: '',
+                client_type: 'residential',
+                is_active: true,
+              });
+
+              if (clientError) throw clientError;
+            }
+          }
+
+          setSuccess('Conta criada com sucesso! Faça login para acessar.');
+          setTimeout(() => {
+            setIsSignUp(false);
+            setEmail('');
+            setPassword('');
+            setFullName('');
+            setPhone('');
+            setDocument('');
+            setSuccess('');
+          }, 2000);
         }
       } else {
         const { data, error } = await supabase.auth.signInWithPassword({ email, password });
@@ -88,7 +125,8 @@ export function Auth() {
         }
       }
     } catch (err: any) {
-      setError(err.message || (isSignUp ? 'Erro ao criar conta.' : 'Credenciais inválidas.'));
+      console.error('Auth error:', err);
+      setError(err.message || (isSignUp ? 'Erro ao criar conta.' : 'Email ou senha incorretos.'));
     } finally {
       setLoading(false);
     }
@@ -115,7 +153,7 @@ export function Auth() {
               <>
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-2">
-                    Nome Completo
+                    Nome Completo *
                   </label>
                   <input
                     type="text"
@@ -128,7 +166,21 @@ export function Auth() {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-2">
-                    Telefone
+                    CPF / CNPJ *
+                  </label>
+                  <input
+                    type="text"
+                    value={document}
+                    onChange={(e) => setDocument(e.target.value)}
+                    className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none transition"
+                    placeholder="000.000.000-00 ou 00.000.000/0000-00"
+                    required
+                  />
+                  <p className="text-xs text-slate-500 mt-1">Necessário para emissão de notas fiscais</p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">
+                    Telefone *
                   </label>
                   <input
                     type="tel"
@@ -179,6 +231,12 @@ export function Auth() {
             {error && (
               <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
                 {error}
+              </div>
+            )}
+
+            {success && (
+              <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-lg text-emerald-700 text-sm">
+                {success}
               </div>
             )}
 
