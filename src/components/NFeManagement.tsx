@@ -13,123 +13,101 @@ import {
   XCircle,
   Clock,
   FileText,
+  ShoppingCart,
+  Briefcase,
+  Package,
+  Building2,
 } from 'lucide-react';
 import { formatCurrency, formatDate } from '../lib/constants';
+import { COMPANIES } from '../lib/companies';
 import type { Client } from '../lib/database.types';
+
+interface Company {
+  id: string;
+  cnpj: string;
+  trade_name: string;
+  company_name: string;
+  municipal_registration?: string;
+  address: string;
+  city: string;
+  state: string;
+  zip_code: string;
+  phone: string;
+  email: string;
+}
 
 interface NFeInvoice {
   id: string;
   client_id: string;
-  budget_id?: string;
+  company_id?: string;
   nfe_number: string;
   nfe_series: number;
   nfe_key?: string;
   nfe_type: 'service' | 'product';
   issue_date: string;
-  delivery_date?: string;
   company_name: string;
   company_document: string;
   company_im?: string;
-  company_address: string;
-  company_neighborhood?: string;
-  company_city: string;
-  company_state: string;
-  company_zipcode: string;
-  company_phone?: string;
-  company_email?: string;
   customer_name: string;
   customer_document: string;
-  customer_ie?: string;
   customer_address: string;
-  customer_neighborhood?: string;
   customer_city: string;
   customer_state: string;
-  customer_zipcode: string;
-  customer_email?: string;
   service_description: string;
-  cnae_code?: string;
-  nbs_code?: string;
-  lc_116_code?: string;
-  service_state?: string;
-  service_city?: string;
-  incident_state?: string;
-  incident_city?: string;
-  inss_rate: number;
-  inss_value: number;
-  pis_rate: number;
-  pis_value: number;
-  cofins_rate: number;
-  cofins_value: number;
-  irrf_rate: number;
-  irrf_value: number;
-  csll_rate: number;
-  csll_value: number;
-  iss_rate: number;
-  iss_value: number;
-  issqn_rate: number;
-  issqn_value: number;
-  issqn_retained: number;
-  base_deductions: number;
-  conditional_discount: number;
-  unconditional_discount: number;
-  retention: boolean;
   service_total: number;
   liquid_value: number;
   status: 'draft' | 'processing' | 'authorized' | 'cancelled' | 'rejected';
-  additional_info?: string;
   pdf_url?: string;
-  xml_url?: string;
   created_at: string;
 }
 
+interface Product {
+  id?: string;
+  sequence_number: number;
+  product_code: string;
+  ean: string;
+  description: string;
+  ncm: string;
+  cfop: string;
+  unit: string;
+  quantity: number;
+  unit_value: number;
+  total_value: number;
+}
+
 export function NFeManagement() {
+  const [activeTab, setActiveTab] = useState<'service' | 'product'>('service');
   const [invoices, setInvoices] = useState<NFeInvoice[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
+  const [companies, setCompanies] = useState<Company[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
-  const [editingInvoice, setEditingInvoice] = useState<NFeInvoice | null>(null);
+  const [invoiceType, setInvoiceType] = useState<'service' | 'product'>('service');
   const [searchTerm, setSearchTerm] = useState('');
   const [currentStep, setCurrentStep] = useState(1);
+  const [products, setProducts] = useState<Product[]>([]);
 
   const [formData, setFormData] = useState({
     client_id: '',
+    company_id: '',
     nfe_type: 'service' as 'service' | 'product',
-    company_name: 'OTONIEL ANTONIO DOS SANTOS',
-    company_document: '',
-    company_im: '',
-    company_address: '',
-    company_neighborhood: '',
-    company_city: 'Goiânia',
-    company_state: 'GO',
-    company_zipcode: '',
-    company_phone: '',
-    company_email: '',
-    customer_name: '',
-    customer_document: '',
-    customer_ie: '',
     customer_address: '',
-    customer_neighborhood: '',
     customer_city: '',
     customer_state: '',
-    customer_zipcode: '',
-    customer_email: '',
     service_description: '',
     cnae_code: '3329-5/99',
     nbs_code: '1.2606.00.00',
     lc_116_code: '14.07',
-    service_state: 'Goiás',
-    service_city: 'Goiânia',
-    incident_state: 'Goiás',
-    incident_city: 'Goiânia',
-    inss_rate: 0,
-    pis_rate: 0,
-    cofins_rate: 0,
-    irrf_rate: 0,
-    csll_rate: 0,
-    iss_rate: 5.00,
-    issqn_rate: 0,
-    retention: false,
+    operation_nature: 'Venda Dentro do Estado',
+    cfop: '5102',
+    payment_method: 'PIX',
+    freight_type: 'Sem Ocorrência de Transporte',
     service_total: 0,
+    discount: 0,
+    freight: 0,
+    insurance: 0,
+    other_expenses: 0,
+    iss_rate: 5.0,
     additional_info: '',
   });
 
@@ -138,85 +116,16 @@ export function NFeManagement() {
   }, []);
 
   const loadData = async () => {
-    const [invoicesRes, clientsRes] = await Promise.all([
+    const [invoicesRes, clientsRes, companiesRes] = await Promise.all([
       supabase.from('nfe_invoices').select('*').order('created_at', { ascending: false }),
       supabase.from('clients').select('*').eq('is_active', true).order('name'),
+      supabase.from('companies').select('*').eq('is_active', true).order('trade_name'),
     ]);
 
     if (invoicesRes.data) setInvoices(invoicesRes.data);
     if (clientsRes.data) setClients(clientsRes.data);
+    if (companiesRes.data) setCompanies(companiesRes.data);
     setLoading(false);
-  };
-
-  const calculateTaxes = () => {
-    const total = formData.service_total;
-    const inss_value = (total * formData.inss_rate) / 100;
-    const pis_value = (total * formData.pis_rate) / 100;
-    const cofins_value = (total * formData.cofins_rate) / 100;
-    const irrf_value = (total * formData.irrf_rate) / 100;
-    const csll_value = (total * formData.csll_rate) / 100;
-    const iss_value = (total * formData.iss_rate) / 100;
-    const issqn_value = (total * formData.issqn_rate) / 100;
-
-    const total_taxes = inss_value + pis_value + cofins_value + irrf_value + csll_value + iss_value + issqn_value;
-    const liquid_value = total - total_taxes;
-
-    return {
-      inss_value,
-      pis_value,
-      cofins_value,
-      irrf_value,
-      csll_value,
-      iss_value,
-      issqn_value,
-      liquid_value,
-    };
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-
-    const taxes = calculateTaxes();
-    const selectedClient = clients.find((c) => c.id === formData.client_id);
-
-    if (!selectedClient) {
-      alert('Selecione um cliente');
-      return;
-    }
-
-    const invoiceData = {
-      ...formData,
-      ...taxes,
-      customer_name: selectedClient.name,
-      customer_document: selectedClient.document,
-      customer_address: selectedClient.address,
-      customer_email: selectedClient.email,
-      nfe_number: editingInvoice?.nfe_number || `${Date.now()}`,
-      nfe_series: 1,
-      issue_date: new Date().toISOString(),
-      status: 'draft' as const,
-    };
-
-    try {
-      if (editingInvoice) {
-        const { error } = await supabase
-          .from('nfe_invoices')
-          .update(invoiceData)
-          .eq('id', editingInvoice.id);
-
-        if (error) throw error;
-      } else {
-        const { error } = await supabase.from('nfe_invoices').insert(invoiceData);
-        if (error) throw error;
-      }
-
-      closeModal();
-      loadData();
-      alert('Nota fiscal salva com sucesso!');
-    } catch (error: any) {
-      console.error('Error saving invoice:', error);
-      alert('Erro ao salvar nota fiscal: ' + error.message);
-    }
   };
 
   const handleClientSelect = (clientId: string) => {
@@ -225,11 +134,112 @@ export function NFeManagement() {
       setFormData((prev) => ({
         ...prev,
         client_id: clientId,
-        customer_name: client.name,
-        customer_document: client.document,
-        customer_address: client.address,
-        customer_email: client.email,
+        customer_address: client.address || '',
+        customer_city: '',
+        customer_state: '',
       }));
+    }
+  };
+
+  const handleCompanySelect = (companyId: string) => {
+    const company = companies.find((c) => c.id === companyId);
+    if (company) {
+      setFormData((prev) => ({
+        ...prev,
+        company_id: companyId,
+      }));
+    }
+  };
+
+  const calculateTotal = () => {
+    if (invoiceType === 'product') {
+      const productsTotal = products.reduce((sum, p) => sum + p.total_value, 0);
+      return productsTotal + formData.freight + formData.insurance + formData.other_expenses - formData.discount;
+    }
+    return formData.service_total;
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    const selectedClient = clients.find((c) => c.id === formData.client_id);
+    const selectedCompany = companies.find((c) => c.id === formData.company_id);
+
+    if (!selectedClient) {
+      alert('Selecione um cliente');
+      return;
+    }
+
+    if (!selectedCompany) {
+      alert('Selecione uma empresa emissora');
+      return;
+    }
+
+    if (invoiceType === 'product' && products.length === 0) {
+      alert('Adicione pelo menos um produto');
+      return;
+    }
+
+    const total = calculateTotal();
+    const issValue = (total * formData.iss_rate) / 100;
+
+    const invoiceData = {
+      ...formData,
+      nfe_type: invoiceType,
+      customer_name: selectedClient.name,
+      customer_document: selectedClient.document,
+      customer_address: formData.customer_address || selectedClient.address,
+      customer_email: selectedClient.email,
+      company_name: selectedCompany.trade_name,
+      company_document: selectedCompany.cnpj,
+      company_im: selectedCompany.municipal_registration,
+      company_address: selectedCompany.address,
+      company_city: selectedCompany.city,
+      company_state: selectedCompany.state,
+      company_zipcode: selectedCompany.zip_code,
+      company_phone: selectedCompany.phone,
+      company_email: selectedCompany.email,
+      nfe_number: `${Date.now()}`,
+      nfe_series: 1,
+      issue_date: new Date().toISOString(),
+      service_total: total,
+      iss_value: issValue,
+      liquid_value: total - issValue,
+      status: 'draft' as const,
+    };
+
+    try {
+      const { data: newInvoice, error } = await supabase
+        .from('nfe_invoices')
+        .insert(invoiceData)
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      if (newInvoice && invoiceType === 'product' && products.length > 0) {
+        const productsData = products.map((p) => ({
+          ...p,
+          nfe_id: newInvoice.id,
+        }));
+
+        const { error: productsError } = await supabase
+          .from('nfe_products')
+          .insert(productsData);
+
+        if (productsError) throw productsError;
+      }
+
+      closeModal();
+      loadData();
+      alert(
+        invoiceType === 'service'
+          ? 'NFS-e de Serviço criada com sucesso!'
+          : 'NF-e de Produto criada com sucesso!'
+      );
+    } catch (error: any) {
+      console.error('Error saving invoice:', error);
+      alert('Erro ao salvar nota fiscal: ' + error.message);
     }
   };
 
@@ -240,10 +250,6 @@ export function NFeManagement() {
     if (!error) {
       setInvoices(invoices.filter((inv) => inv.id !== id));
     }
-  };
-
-  const generatePDF = async (invoice: NFeInvoice) => {
-    alert('Funcionalidade de geração de PDF será implementada em breve');
   };
 
   const authorizeInvoice = async (id: string) => {
@@ -258,107 +264,79 @@ export function NFeManagement() {
     }
   };
 
-  const openModal = (invoice?: NFeInvoice) => {
-    if (invoice) {
-      setEditingInvoice(invoice);
-      setFormData({
-        client_id: invoice.client_id,
-        nfe_type: invoice.nfe_type,
-        company_name: invoice.company_name,
-        company_document: invoice.company_document,
-        company_im: invoice.company_im || '',
-        company_address: invoice.company_address,
-        company_neighborhood: invoice.company_neighborhood || '',
-        company_city: invoice.company_city,
-        company_state: invoice.company_state,
-        company_zipcode: invoice.company_zipcode,
-        company_phone: invoice.company_phone || '',
-        company_email: invoice.company_email || '',
-        customer_name: invoice.customer_name,
-        customer_document: invoice.customer_document,
-        customer_ie: invoice.customer_ie || '',
-        customer_address: invoice.customer_address,
-        customer_neighborhood: invoice.customer_neighborhood || '',
-        customer_city: invoice.customer_city,
-        customer_state: invoice.customer_state,
-        customer_zipcode: invoice.customer_zipcode,
-        customer_email: invoice.customer_email || '',
-        service_description: invoice.service_description,
-        cnae_code: invoice.cnae_code || '',
-        nbs_code: invoice.nbs_code || '',
-        lc_116_code: invoice.lc_116_code || '',
-        service_state: invoice.service_state || '',
-        service_city: invoice.service_city || '',
-        incident_state: invoice.incident_state || '',
-        incident_city: invoice.incident_city || '',
-        inss_rate: invoice.inss_rate,
-        pis_rate: invoice.pis_rate,
-        cofins_rate: invoice.cofins_rate,
-        irrf_rate: invoice.irrf_rate,
-        csll_rate: invoice.csll_rate,
-        iss_rate: invoice.iss_rate,
-        issqn_rate: invoice.issqn_rate,
-        retention: invoice.retention,
-        service_total: invoice.service_total,
-        additional_info: invoice.additional_info || '',
-      });
+  const addProduct = () => {
+    const newProduct: Product = {
+      sequence_number: products.length + 1,
+      product_code: '',
+      ean: '',
+      description: '',
+      ncm: '',
+      cfop: formData.cfop,
+      unit: 'UN',
+      quantity: 1,
+      unit_value: 0,
+      total_value: 0,
+    };
+    setProducts([...products, newProduct]);
+  };
+
+  const updateProduct = (index: number, field: keyof Product, value: any) => {
+    const updated = [...products];
+    updated[index] = { ...updated[index], [field]: value };
+
+    if (field === 'quantity' || field === 'unit_value') {
+      updated[index].total_value = updated[index].quantity * updated[index].unit_value;
     }
+
+    setProducts(updated);
+  };
+
+  const removeProduct = (index: number) => {
+    setProducts(products.filter((_, i) => i !== index));
+  };
+
+  const openModal = (type: 'service' | 'product') => {
+    setInvoiceType(type);
     setShowModal(true);
     setCurrentStep(1);
+    setProducts([]);
   };
 
   const closeModal = () => {
     setShowModal(false);
-    setEditingInvoice(null);
     setCurrentStep(1);
+    setProducts([]);
     setFormData({
       client_id: '',
+      company_id: '',
       nfe_type: 'service',
-      company_name: 'OTONIEL ANTONIO DOS SANTOS',
-      company_document: '',
-      company_im: '',
-      company_address: '',
-      company_neighborhood: '',
-      company_city: 'Goiânia',
-      company_state: 'GO',
-      company_zipcode: '',
-      company_phone: '',
-      company_email: '',
-      customer_name: '',
-      customer_document: '',
-      customer_ie: '',
       customer_address: '',
-      customer_neighborhood: '',
       customer_city: '',
       customer_state: '',
-      customer_zipcode: '',
-      customer_email: '',
       service_description: '',
       cnae_code: '3329-5/99',
       nbs_code: '1.2606.00.00',
       lc_116_code: '14.07',
-      service_state: 'Goiás',
-      service_city: 'Goiânia',
-      incident_state: 'Goiás',
-      incident_city: 'Goiânia',
-      inss_rate: 0,
-      pis_rate: 0,
-      cofins_rate: 0,
-      irrf_rate: 0,
-      csll_rate: 0,
-      iss_rate: 5.0,
-      issqn_rate: 0,
-      retention: false,
+      operation_nature: 'Venda Dentro do Estado',
+      cfop: '5102',
+      payment_method: 'PIX',
+      freight_type: 'Sem Ocorrência de Transporte',
       service_total: 0,
+      discount: 0,
+      freight: 0,
+      insurance: 0,
+      other_expenses: 0,
+      iss_rate: 5.0,
       additional_info: '',
     });
   };
 
   const filteredInvoices = invoices.filter(
     (invoice) =>
-      invoice.customer_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      invoice.nfe_number.includes(searchTerm) ||
-      invoice.customer_document.includes(searchTerm)
+      invoice.nfe_type === activeTab &&
+      (invoice.customer_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        invoice.nfe_number.includes(searchTerm) ||
+        invoice.customer_document.includes(searchTerm))
   );
 
   const getStatusIcon = (status: string) => {
@@ -413,31 +391,60 @@ export function NFeManagement() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h2 className="text-2xl font-bold text-slate-900">Notas Fiscais Eletrônicas</h2>
-          <p className="text-slate-600">Gerencie suas notas fiscais de serviço e produto</p>
+          <p className="text-slate-600">Gerencie NF-e de Produtos e NFS-e de Serviços</p>
         </div>
+      </div>
+
+      <div className="flex border-b border-slate-200 bg-white rounded-t-xl overflow-x-auto">
         <button
-          onClick={() => openModal()}
-          className="flex items-center gap-2 px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg transition font-medium"
+          onClick={() => setActiveTab('service')}
+          className={`flex items-center gap-2 px-6 py-4 font-medium transition whitespace-nowrap ${
+            activeTab === 'service'
+              ? 'text-emerald-600 border-b-2 border-emerald-500 bg-emerald-50'
+              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+          }`}
         >
-          <Plus className="w-5 h-5" />
-          Nova NF-e
+          <Briefcase className="w-5 h-5" />
+          NFS-e Prestação de Serviço
+        </button>
+        <button
+          onClick={() => setActiveTab('product')}
+          className={`flex items-center gap-2 px-6 py-4 font-medium transition whitespace-nowrap ${
+            activeTab === 'product'
+              ? 'text-blue-600 border-b-2 border-blue-500 bg-blue-50'
+              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+          }`}
+        >
+          <ShoppingCart className="w-5 h-5" />
+          NF-e Venda de Produtos
         </button>
       </div>
 
-      <div className="flex flex-col sm:flex-row gap-4">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
-          <input
-            type="text"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="Buscar por cliente, número ou documento..."
-            className="w-full pl-10 pr-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none"
-          />
+      <div className="bg-white rounded-b-xl shadow-sm border border-slate-200 p-6 space-y-6">
+        <div className="flex flex-col sm:flex-row gap-4">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Buscar por cliente, número ou documento..."
+              className="w-full pl-10 pr-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none"
+            />
+          </div>
+          <button
+            onClick={() => openModal(activeTab)}
+            className={`flex items-center gap-2 px-4 py-2 text-white rounded-lg transition font-medium whitespace-nowrap ${
+              activeTab === 'service'
+                ? 'bg-emerald-500 hover:bg-emerald-600'
+                : 'bg-blue-500 hover:bg-blue-600'
+            }`}
+          >
+            <Plus className="w-5 h-5" />
+            Nova {activeTab === 'service' ? 'NFS-e' : 'NF-e'}
+          </button>
         </div>
-      </div>
 
-      <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead className="bg-slate-50 border-b border-slate-200">
@@ -466,8 +473,17 @@ export function NFeManagement() {
               {filteredInvoices.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="px-6 py-12 text-center text-slate-500">
-                    <FileSpreadsheet className="w-12 h-12 mx-auto mb-4 text-slate-300" />
-                    <p>Nenhuma nota fiscal encontrada</p>
+                    {activeTab === 'service' ? (
+                      <>
+                        <Briefcase className="w-12 h-12 mx-auto mb-4 text-slate-300" />
+                        <p>Nenhuma NFS-e de serviço encontrada</p>
+                      </>
+                    ) : (
+                      <>
+                        <ShoppingCart className="w-12 h-12 mx-auto mb-4 text-slate-300" />
+                        <p>Nenhuma NF-e de produto encontrada</p>
+                      </>
+                    )}
                   </td>
                 </tr>
               ) : (
@@ -478,7 +494,7 @@ export function NFeManagement() {
                         <FileSpreadsheet className="w-5 h-5 text-slate-400" />
                         <div>
                           <div className="text-sm font-medium text-slate-900">
-                            NF-e {invoice.nfe_number}
+                            {invoice.nfe_type === 'service' ? 'NFS-e' : 'NF-e'} {invoice.nfe_number}
                           </div>
                           <div className="text-xs text-slate-500">Série {invoice.nfe_series}</div>
                         </div>
@@ -517,18 +533,11 @@ export function NFeManagement() {
                           <button
                             onClick={() => authorizeInvoice(invoice.id)}
                             className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded-lg transition"
-                            title="Autorizar NF-e"
+                            title="Autorizar"
                           >
                             <CheckCircle className="w-5 h-5" />
                           </button>
                         )}
-                        <button
-                          onClick={() => openModal(invoice)}
-                          className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition"
-                          title="Ver detalhes"
-                        >
-                          <Eye className="w-5 h-5" />
-                        </button>
                         {invoice.pdf_url && (
                           <button
                             onClick={() => window.open(invoice.pdf_url, '_blank')}
@@ -559,11 +568,20 @@ export function NFeManagement() {
 
       {showModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 overflow-y-auto">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-6xl my-8 max-h-[90vh] overflow-y-auto">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl my-8 max-h-[90vh] overflow-y-auto">
             <div className="sticky top-0 bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between z-10">
-              <h3 className="text-xl font-bold text-slate-900">
-                {editingInvoice ? 'Editar Nota Fiscal' : 'Nova Nota Fiscal Eletrônica'}
-              </h3>
+              <div className="flex items-center gap-3">
+                {invoiceType === 'service' ? (
+                  <Briefcase className="w-6 h-6 text-emerald-600" />
+                ) : (
+                  <ShoppingCart className="w-6 h-6 text-blue-600" />
+                )}
+                <h3 className="text-xl font-bold text-slate-900">
+                  {invoiceType === 'service'
+                    ? 'Nova NFS-e - Prestação de Serviço'
+                    : 'Nova NF-e - Venda de Produto'}
+                </h3>
+              </div>
               <button
                 onClick={closeModal}
                 className="p-2 hover:bg-slate-100 rounded-lg transition"
@@ -574,67 +592,51 @@ export function NFeManagement() {
 
             <div className="px-6 py-4">
               <div className="flex gap-2 mb-6 border-b border-slate-200">
-                {['Dados Gerais', 'Discriminação', 'Impostos'].map((step, idx) => (
-                  <button
-                    key={idx}
-                    onClick={() => setCurrentStep(idx + 1)}
-                    className={`px-4 py-2 font-medium border-b-2 transition ${
-                      currentStep === idx + 1
-                        ? 'border-emerald-500 text-emerald-600'
-                        : 'border-transparent text-slate-500 hover:text-slate-700'
-                    }`}
-                  >
-                    {idx + 1}. {step}
-                  </button>
-                ))}
+                {['Empresa e Cliente', invoiceType === 'service' ? 'Serviço' : 'Produtos', 'Finalizar'].map(
+                  (step, idx) => (
+                    <button
+                      key={idx}
+                      onClick={() => setCurrentStep(idx + 1)}
+                      className={`px-4 py-2 font-medium border-b-2 transition ${
+                        currentStep === idx + 1
+                          ? invoiceType === 'service'
+                            ? 'border-emerald-500 text-emerald-600'
+                            : 'border-blue-500 text-blue-600'
+                          : 'border-transparent text-slate-500 hover:text-slate-700'
+                      }`}
+                    >
+                      {idx + 1}. {step}
+                    </button>
+                  )
+                )}
               </div>
 
               <form onSubmit={handleSubmit}>
                 {currentStep === 1 && (
                   <div className="space-y-6">
                     <div>
-                      <h4 className="font-semibold text-slate-900 mb-4">Empresa (Prestador)</h4>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <h4 className="font-semibold text-slate-900 mb-4 flex items-center gap-2">
+                        <Building2 className="w-5 h-5" />
+                        Empresa Emissora
+                      </h4>
+                      <div className="grid grid-cols-1 gap-4">
                         <div>
                           <label className="block text-sm font-medium text-slate-700 mb-2">
-                            Razão Social *
+                            Selecione a Empresa *
                           </label>
-                          <input
-                            type="text"
-                            value={formData.company_name}
-                            onChange={(e) =>
-                              setFormData({ ...formData, company_name: e.target.value })
-                            }
+                          <select
+                            value={formData.company_id}
+                            onChange={(e) => handleCompanySelect(e.target.value)}
                             className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none"
                             required
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-sm font-medium text-slate-700 mb-2">
-                            CNPJ *
-                          </label>
-                          <input
-                            type="text"
-                            value={formData.company_document}
-                            onChange={(e) =>
-                              setFormData({ ...formData, company_document: e.target.value })
-                            }
-                            className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none"
-                            required
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-sm font-medium text-slate-700 mb-2">
-                            Inscrição Municipal
-                          </label>
-                          <input
-                            type="text"
-                            value={formData.company_im}
-                            onChange={(e) =>
-                              setFormData({ ...formData, company_im: e.target.value })
-                            }
-                            className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none"
-                          />
+                          >
+                            <option value="">Selecione a empresa emissora...</option>
+                            {companies.map((company) => (
+                              <option key={company.id} value={company.id}>
+                                {company.trade_name} - {company.cnpj}
+                              </option>
+                            ))}
+                          </select>
                         </div>
                       </div>
                     </div>
@@ -652,7 +654,7 @@ export function NFeManagement() {
                             className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none"
                             required
                           >
-                            <option value="">Selecione...</option>
+                            <option value="">Selecione um cliente...</option>
                             {clients.map((client) => (
                               <option key={client.id} value={client.id}>
                                 {client.name} - {client.document}
@@ -662,7 +664,7 @@ export function NFeManagement() {
                         </div>
                         <div>
                           <label className="block text-sm font-medium text-slate-700 mb-2">
-                            Endereço *
+                            Endereço
                           </label>
                           <input
                             type="text"
@@ -671,25 +673,11 @@ export function NFeManagement() {
                               setFormData({ ...formData, customer_address: e.target.value })
                             }
                             className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none"
-                            required
                           />
                         </div>
                         <div>
                           <label className="block text-sm font-medium text-slate-700 mb-2">
-                            Bairro
-                          </label>
-                          <input
-                            type="text"
-                            value={formData.customer_neighborhood}
-                            onChange={(e) =>
-                              setFormData({ ...formData, customer_neighborhood: e.target.value })
-                            }
-                            className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-sm font-medium text-slate-700 mb-2">
-                            Cidade *
+                            Cidade
                           </label>
                           <input
                             type="text"
@@ -698,21 +686,6 @@ export function NFeManagement() {
                               setFormData({ ...formData, customer_city: e.target.value })
                             }
                             className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none"
-                            required
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-sm font-medium text-slate-700 mb-2">
-                            Estado *
-                          </label>
-                          <input
-                            type="text"
-                            value={formData.customer_state}
-                            onChange={(e) =>
-                              setFormData({ ...formData, customer_state: e.target.value })
-                            }
-                            className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none"
-                            required
                           />
                         </div>
                       </div>
@@ -720,7 +693,7 @@ export function NFeManagement() {
                   </div>
                 )}
 
-                {currentStep === 2 && (
+                {currentStep === 2 && invoiceType === 'service' && (
                   <div className="space-y-6">
                     <div>
                       <label className="block text-sm font-medium text-slate-700 mb-2">
@@ -750,7 +723,6 @@ export function NFeManagement() {
                             setFormData({ ...formData, cnae_code: e.target.value })
                           }
                           className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none"
-                          placeholder="3329-5/99"
                         />
                       </div>
                       <div>
@@ -764,12 +736,11 @@ export function NFeManagement() {
                             setFormData({ ...formData, nbs_code: e.target.value })
                           }
                           className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none"
-                          placeholder="1.2606.00.00"
                         />
                       </div>
                       <div>
                         <label className="block text-sm font-medium text-slate-700 mb-2">
-                          Item LC 116/03
+                          LC 116/03
                         </label>
                         <input
                           type="text"
@@ -778,7 +749,6 @@ export function NFeManagement() {
                             setFormData({ ...formData, lc_116_code: e.target.value })
                           }
                           className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none"
-                          placeholder="14.07"
                         />
                       </div>
                     </div>
@@ -801,10 +771,247 @@ export function NFeManagement() {
                         required
                       />
                     </div>
+                  </div>
+                )}
+
+                {currentStep === 2 && invoiceType === 'product' && (
+                  <div className="space-y-6">
+                    <div className="flex items-center justify-between">
+                      <h4 className="font-semibold text-slate-900">Produtos</h4>
+                      <button
+                        type="button"
+                        onClick={addProduct}
+                        className="flex items-center gap-2 px-3 py-1.5 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition text-sm"
+                      >
+                        <Plus className="w-4 h-4" />
+                        Adicionar Produto
+                      </button>
+                    </div>
+
+                    {products.length === 0 ? (
+                      <div className="text-center py-8 bg-slate-50 rounded-lg border border-slate-200">
+                        <Package className="w-12 h-12 text-slate-300 mx-auto mb-2" />
+                        <p className="text-slate-500 text-sm">
+                          Nenhum produto adicionado. Clique em "Adicionar Produto" para começar.
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="space-y-4 max-h-[400px] overflow-y-auto">
+                        {products.map((product, index) => (
+                          <div
+                            key={index}
+                            className="p-4 bg-slate-50 rounded-lg border border-slate-200 space-y-3"
+                          >
+                            <div className="flex items-center justify-between">
+                              <span className="font-medium text-slate-900">
+                                Produto #{product.sequence_number}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => removeProduct(index)}
+                                className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg transition"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
+                            <div className="grid grid-cols-2 gap-3">
+                              <div className="col-span-2">
+                                <input
+                                  type="text"
+                                  placeholder="Descrição do Produto *"
+                                  value={product.description}
+                                  onChange={(e) =>
+                                    updateProduct(index, 'description', e.target.value)
+                                  }
+                                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm"
+                                  required
+                                />
+                              </div>
+                              <input
+                                type="text"
+                                placeholder="Código"
+                                value={product.product_code}
+                                onChange={(e) =>
+                                  updateProduct(index, 'product_code', e.target.value)
+                                }
+                                className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm"
+                              />
+                              <input
+                                type="text"
+                                placeholder="NCM"
+                                value={product.ncm}
+                                onChange={(e) => updateProduct(index, 'ncm', e.target.value)}
+                                className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm"
+                              />
+                              <input
+                                type="number"
+                                placeholder="Quantidade *"
+                                step="0.01"
+                                value={product.quantity}
+                                onChange={(e) =>
+                                  updateProduct(index, 'quantity', parseFloat(e.target.value) || 0)
+                                }
+                                className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm"
+                                required
+                              />
+                              <input
+                                type="number"
+                                placeholder="Valor Unitário *"
+                                step="0.01"
+                                value={product.unit_value}
+                                onChange={(e) =>
+                                  updateProduct(
+                                    index,
+                                    'unit_value',
+                                    parseFloat(e.target.value) || 0
+                                  )
+                                }
+                                className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm"
+                                required
+                              />
+                              <div className="col-span-2 text-right">
+                                <span className="text-sm font-medium text-slate-700">
+                                  Total: {formatCurrency(product.total_value)}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pt-4 border-t border-slate-200">
+                      <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-2">
+                          Desconto
+                        </label>
+                        <input
+                          type="number"
+                          step="0.01"
+                          value={formData.discount}
+                          onChange={(e) =>
+                            setFormData({ ...formData, discount: parseFloat(e.target.value) || 0 })
+                          }
+                          className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-2">
+                          Frete
+                        </label>
+                        <input
+                          type="number"
+                          step="0.01"
+                          value={formData.freight}
+                          onChange={(e) =>
+                            setFormData({ ...formData, freight: parseFloat(e.target.value) || 0 })
+                          }
+                          className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-2">
+                          Seguro
+                        </label>
+                        <input
+                          type="number"
+                          step="0.01"
+                          value={formData.insurance}
+                          onChange={(e) =>
+                            setFormData({ ...formData, insurance: parseFloat(e.target.value) || 0 })
+                          }
+                          className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-2">
+                          Outras Despesas
+                        </label>
+                        <input
+                          type="number"
+                          step="0.01"
+                          value={formData.other_expenses}
+                          onChange={(e) =>
+                            setFormData({
+                              ...formData,
+                              other_expenses: parseFloat(e.target.value) || 0,
+                            })
+                          }
+                          className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {currentStep === 3 && (
+                  <div className="space-y-6">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-2">
+                          Natureza da Operação
+                        </label>
+                        <select
+                          value={formData.operation_nature}
+                          onChange={(e) =>
+                            setFormData({ ...formData, operation_nature: e.target.value })
+                          }
+                          className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none"
+                        >
+                          <option>Venda Dentro do Estado</option>
+                          <option>Venda Fora do Estado</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-2">
+                          CFOP
+                        </label>
+                        <input
+                          type="text"
+                          value={formData.cfop}
+                          onChange={(e) => setFormData({ ...formData, cfop: e.target.value })}
+                          className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-2">
+                          Forma de Pagamento
+                        </label>
+                        <select
+                          value={formData.payment_method}
+                          onChange={(e) =>
+                            setFormData({ ...formData, payment_method: e.target.value })
+                          }
+                          className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none"
+                        >
+                          <option>PIX</option>
+                          <option>Dinheiro</option>
+                          <option>Cartão de Crédito</option>
+                          <option>Cartão de Débito</option>
+                          <option>Boleto</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-2">
+                          Tipo de Frete
+                        </label>
+                        <select
+                          value={formData.freight_type}
+                          onChange={(e) =>
+                            setFormData({ ...formData, freight_type: e.target.value })
+                          }
+                          className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none"
+                        >
+                          <option>Sem Ocorrência de Transporte</option>
+                          <option>Por conta do Emitente</option>
+                          <option>Por conta do Destinatário</option>
+                        </select>
+                      </div>
+                    </div>
 
                     <div>
                       <label className="block text-sm font-medium text-slate-700 mb-2">
-                        Informações Complementares
+                        Observações
                       </label>
                       <textarea
                         value={formData.additional_info}
@@ -815,154 +1022,46 @@ export function NFeManagement() {
                         rows={3}
                       />
                     </div>
-                  </div>
-                )}
 
-                {currentStep === 3 && (
-                  <div className="space-y-6">
-                    <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                      <div>
-                        <label className="block text-sm font-medium text-slate-700 mb-2">
-                          Alíquota INSS (%)
-                        </label>
-                        <input
-                          type="number"
-                          step="0.01"
-                          value={formData.inss_rate}
-                          onChange={(e) =>
-                            setFormData({ ...formData, inss_rate: parseFloat(e.target.value) || 0 })
-                          }
-                          className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-slate-700 mb-2">
-                          Alíquota PIS (%)
-                        </label>
-                        <input
-                          type="number"
-                          step="0.01"
-                          value={formData.pis_rate}
-                          onChange={(e) =>
-                            setFormData({ ...formData, pis_rate: parseFloat(e.target.value) || 0 })
-                          }
-                          className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-slate-700 mb-2">
-                          Alíquota COFINS (%)
-                        </label>
-                        <input
-                          type="number"
-                          step="0.01"
-                          value={formData.cofins_rate}
-                          onChange={(e) =>
-                            setFormData({
-                              ...formData,
-                              cofins_rate: parseFloat(e.target.value) || 0,
-                            })
-                          }
-                          className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-slate-700 mb-2">
-                          Alíquota IRRF (%)
-                        </label>
-                        <input
-                          type="number"
-                          step="0.01"
-                          value={formData.irrf_rate}
-                          onChange={(e) =>
-                            setFormData({ ...formData, irrf_rate: parseFloat(e.target.value) || 0 })
-                          }
-                          className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-slate-700 mb-2">
-                          Alíquota CSLL (%)
-                        </label>
-                        <input
-                          type="number"
-                          step="0.01"
-                          value={formData.csll_rate}
-                          onChange={(e) =>
-                            setFormData({ ...formData, csll_rate: parseFloat(e.target.value) || 0 })
-                          }
-                          className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-slate-700 mb-2">
-                          Alíquota ISS (%)
-                        </label>
-                        <input
-                          type="number"
-                          step="0.01"
-                          value={formData.iss_rate}
-                          onChange={(e) =>
-                            setFormData({ ...formData, iss_rate: parseFloat(e.target.value) || 0 })
-                          }
-                          className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="p-4 bg-slate-50 rounded-lg">
-                      <h4 className="font-semibold text-slate-900 mb-3">Resumo dos Valores</h4>
+                    <div className="p-4 bg-emerald-50 rounded-lg border border-emerald-200">
+                      <h4 className="font-semibold text-emerald-900 mb-3">Resumo da Nota Fiscal</h4>
                       <div className="space-y-2 text-sm">
-                        <div className="flex justify-between">
-                          <span className="text-slate-600">Valor Total dos Serviços:</span>
-                          <span className="font-medium">{formatCurrency(formData.service_total)}</span>
-                        </div>
-                        {formData.service_total > 0 && (
+                        {invoiceType === 'product' && (
                           <>
                             <div className="flex justify-between">
-                              <span className="text-slate-600">INSS:</span>
-                              <span className="text-red-600">
-                                -{formatCurrency(calculateTaxes().inss_value)}
+                              <span className="text-slate-600">Subtotal Produtos:</span>
+                              <span className="font-medium">
+                                {formatCurrency(products.reduce((sum, p) => sum + p.total_value, 0))}
                               </span>
                             </div>
                             <div className="flex justify-between">
-                              <span className="text-slate-600">PIS:</span>
+                              <span className="text-slate-600">Desconto:</span>
                               <span className="text-red-600">
-                                -{formatCurrency(calculateTaxes().pis_value)}
+                                -{formatCurrency(formData.discount)}
                               </span>
                             </div>
                             <div className="flex justify-between">
-                              <span className="text-slate-600">COFINS:</span>
-                              <span className="text-red-600">
-                                -{formatCurrency(calculateTaxes().cofins_value)}
-                              </span>
+                              <span className="text-slate-600">Frete:</span>
+                              <span className="font-medium">{formatCurrency(formData.freight)}</span>
                             </div>
                             <div className="flex justify-between">
-                              <span className="text-slate-600">IRRF:</span>
-                              <span className="text-red-600">
-                                -{formatCurrency(calculateTaxes().irrf_value)}
-                              </span>
+                              <span className="text-slate-600">Seguro:</span>
+                              <span className="font-medium">{formatCurrency(formData.insurance)}</span>
                             </div>
                             <div className="flex justify-between">
-                              <span className="text-slate-600">CSLL:</span>
-                              <span className="text-red-600">
-                                -{formatCurrency(calculateTaxes().csll_value)}
-                              </span>
-                            </div>
-                            <div className="flex justify-between">
-                              <span className="text-slate-600">ISS:</span>
-                              <span className="text-red-600">
-                                -{formatCurrency(calculateTaxes().iss_value)}
-                              </span>
-                            </div>
-                            <div className="pt-2 border-t border-slate-300 flex justify-between">
-                              <span className="font-semibold text-slate-900">Valor Líquido:</span>
-                              <span className="font-bold text-emerald-600 text-lg">
-                                {formatCurrency(calculateTaxes().liquid_value)}
+                              <span className="text-slate-600">Outras Despesas:</span>
+                              <span className="font-medium">
+                                {formatCurrency(formData.other_expenses)}
                               </span>
                             </div>
                           </>
                         )}
+                        <div className="flex justify-between pt-2 border-t border-emerald-300">
+                          <span className="font-semibold text-emerald-900">Valor Total:</span>
+                          <span className="font-bold text-emerald-600 text-lg">
+                            {formatCurrency(calculateTotal())}
+                          </span>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -982,17 +1081,25 @@ export function NFeManagement() {
                     <button
                       type="button"
                       onClick={() => setCurrentStep(currentStep + 1)}
-                      className="flex-1 px-6 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg transition font-medium"
+                      className={`flex-1 px-6 py-2 text-white rounded-lg transition font-medium ${
+                        invoiceType === 'service'
+                          ? 'bg-emerald-500 hover:bg-emerald-600'
+                          : 'bg-blue-500 hover:bg-blue-600'
+                      }`}
                     >
                       Próximo
                     </button>
                   ) : (
                     <button
                       type="submit"
-                      className="flex-1 flex items-center justify-center gap-2 px-6 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg transition font-medium"
+                      className={`flex-1 flex items-center justify-center gap-2 px-6 py-2 text-white rounded-lg transition font-medium ${
+                        invoiceType === 'service'
+                          ? 'bg-emerald-500 hover:bg-emerald-600'
+                          : 'bg-blue-500 hover:bg-blue-600'
+                      }`}
                     >
                       <Save className="w-5 h-5" />
-                      Salvar Nota Fiscal
+                      Salvar {invoiceType === 'service' ? 'NFS-e' : 'NF-e'}
                     </button>
                   )}
                 </div>
