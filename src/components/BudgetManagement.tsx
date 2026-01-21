@@ -1,0 +1,330 @@
+import { useState, useEffect } from 'react';
+import { supabase } from '../lib/supabase';
+import {
+  Plus,
+  Search,
+  FileText,
+  Calendar,
+  User,
+  ChevronRight,
+} from 'lucide-react';
+import { STATUS_CONFIG, formatCurrency, formatDate } from '../lib/constants';
+import { BudgetEditor } from './BudgetEditor';
+import type { Budget, Client } from '../lib/database.types';
+
+type BudgetWithClient = Budget & { clients?: Client | null };
+
+export function BudgetManagement() {
+  const [budgets, setBudgets] = useState<BudgetWithClient[]>([]);
+  const [clients, setClients] = useState<Client[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [selectedBudgetId, setSelectedBudgetId] = useState<string | null>(null);
+  const [showNewBudget, setShowNewBudget] = useState(false);
+
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  const loadData = async () => {
+    const [budgetsRes, clientsRes] = await Promise.all([
+      supabase
+        .from('budgets')
+        .select('*, clients(*)')
+        .order('created_at', { ascending: false }),
+      supabase.from('clients').select('*').order('name'),
+    ]);
+
+    if (budgetsRes.data) setBudgets(budgetsRes.data);
+    if (clientsRes.data) setClients(clientsRes.data);
+    setLoading(false);
+  };
+
+  const createBudget = async (data: {
+    title: string;
+    client_id: string | null;
+    responsible_name: string;
+    description: string;
+    validity_date: string;
+  }) => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    const client = data.client_id ? clients.find((c) => c.id === data.client_id) : null;
+
+    const { data: newBudget, error } = await supabase
+      .from('budgets')
+      .insert({
+        user_id: user.id,
+        title: data.title,
+        client_id: data.client_id,
+        client_name: client?.name || '',
+        responsible_name: data.responsible_name,
+        description: data.description,
+        validity_date: data.validity_date || null,
+        status: 'draft',
+      })
+      .select('*, clients(*)')
+      .single();
+
+    if (!error && newBudget) {
+      setBudgets([newBudget, ...budgets]);
+      setShowNewBudget(false);
+      setSelectedBudgetId(newBudget.id);
+    }
+  };
+
+  const filteredBudgets = budgets.filter((b) => {
+    const matchesSearch =
+      b.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      b.client_name.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesStatus = statusFilter === 'all' || b.status === statusFilter;
+    return matchesSearch && matchesStatus;
+  });
+
+  if (selectedBudgetId) {
+    return (
+      <BudgetEditor
+        budgetId={selectedBudgetId}
+        onBack={() => {
+          setSelectedBudgetId(null);
+          loadData();
+        }}
+      />
+    );
+  }
+
+  if (loading) {
+    return (
+      <div className="h-full flex items-center justify-center">
+        <div className="text-slate-400">Carregando...</div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="h-full overflow-y-auto p-8">
+      <div className="flex items-center justify-between mb-8">
+        <div>
+          <h1 className="text-3xl font-bold text-slate-900">Orçamentos</h1>
+          <p className="text-slate-600">Gerencie seus orçamentos de engenharia</p>
+        </div>
+        <button
+          onClick={() => setShowNewBudget(true)}
+          className="flex items-center gap-2 bg-emerald-500 hover:bg-emerald-600 text-white px-4 py-2 rounded-lg transition font-medium"
+        >
+          <Plus className="w-5 h-5" />
+          Novo Orçamento
+        </button>
+      </div>
+
+      <div className="bg-white rounded-xl shadow-sm border border-slate-200 mb-6">
+        <div className="p-4 border-b border-slate-200 flex gap-4">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Buscar orçamentos..."
+              className="w-full pl-10 pr-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none"
+            />
+          </div>
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            className="px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none"
+          >
+            <option value="all">Todos os Status</option>
+            {Object.entries(STATUS_CONFIG).map(([key, config]) => (
+              <option key={key} value={key}>
+                {config.label}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {filteredBudgets.length === 0 ? (
+          <div className="p-12 text-center">
+            <FileText className="w-16 h-16 text-slate-300 mx-auto mb-4" />
+            <p className="text-slate-500">Nenhum orçamento encontrado</p>
+          </div>
+        ) : (
+          <div className="divide-y divide-slate-200">
+            {filteredBudgets.map((budget) => {
+              const total = budget.total_materials + budget.total_labor + budget.total_additional;
+              return (
+                <button
+                  key={budget.id}
+                  onClick={() => setSelectedBudgetId(budget.id)}
+                  className="w-full p-4 hover:bg-slate-50 transition text-left flex items-center justify-between"
+                >
+                  <div className="flex-1">
+                    <div className="flex items-center gap-3 mb-2">
+                      <h3 className="font-semibold text-slate-900">{budget.title}</h3>
+                      <span
+                        className={`px-2 py-1 rounded-full text-xs font-medium ${
+                          STATUS_CONFIG[budget.status]?.color || STATUS_CONFIG.draft.color
+                        }`}
+                      >
+                        {STATUS_CONFIG[budget.status]?.label || budget.status}
+                      </span>
+                    </div>
+                    <div className="flex flex-wrap gap-4 text-sm text-slate-600">
+                      {budget.client_name && (
+                        <span className="flex items-center gap-1">
+                          <User className="w-4 h-4 text-slate-400" />
+                          {budget.client_name}
+                        </span>
+                      )}
+                      <span className="flex items-center gap-1">
+                        <Calendar className="w-4 h-4 text-slate-400" />
+                        {formatDate(budget.created_at)}
+                      </span>
+                      {total > 0 && (
+                        <span className="font-medium text-emerald-600">
+                          {formatCurrency(total)}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <ChevronRight className="w-5 h-5 text-slate-400" />
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {showNewBudget && (
+        <NewBudgetModal
+          clients={clients}
+          onClose={() => setShowNewBudget(false)}
+          onSubmit={createBudget}
+        />
+      )}
+    </div>
+  );
+}
+
+function NewBudgetModal({
+  clients,
+  onClose,
+  onSubmit,
+}: {
+  clients: Client[];
+  onClose: () => void;
+  onSubmit: (data: {
+    title: string;
+    client_id: string | null;
+    responsible_name: string;
+    description: string;
+    validity_date: string;
+  }) => void;
+}) {
+  const [formData, setFormData] = useState({
+    title: '',
+    client_id: '',
+    responsible_name: '',
+    description: '',
+    validity_date: '',
+  });
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    onSubmit({
+      ...formData,
+      client_id: formData.client_id || null,
+    });
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+      <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full">
+        <div className="p-6 border-b border-slate-200">
+          <h2 className="text-xl font-bold text-slate-900">Novo Orçamento</h2>
+        </div>
+        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-2">
+              Título do Projeto *
+            </label>
+            <input
+              type="text"
+              value={formData.title}
+              onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+              className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none"
+              placeholder="Ex: Sistema Solar Residencial"
+              required
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-2">Cliente</label>
+            <select
+              value={formData.client_id}
+              onChange={(e) => setFormData({ ...formData, client_id: e.target.value })}
+              className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none"
+            >
+              <option value="">Selecione um cliente</option>
+              {clients.map((client) => (
+                <option key={client.id} value={client.id}>
+                  {client.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-2">
+                Responsável Técnico
+              </label>
+              <input
+                type="text"
+                value={formData.responsible_name}
+                onChange={(e) => setFormData({ ...formData, responsible_name: e.target.value })}
+                className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-2">
+                Validade
+              </label>
+              <input
+                type="date"
+                value={formData.validity_date}
+                onChange={(e) => setFormData({ ...formData, validity_date: e.target.value })}
+                className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none"
+              />
+            </div>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-2">Descrição</label>
+            <textarea
+              value={formData.description}
+              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+              className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none"
+              rows={3}
+              placeholder="Descreva o escopo do projeto..."
+            />
+          </div>
+          <div className="flex gap-3 pt-4">
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex-1 px-4 py-2 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 transition"
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              className="flex-1 px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg transition"
+            >
+              Criar Orçamento
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}

@@ -1,19 +1,30 @@
 import { useEffect, useState } from 'react';
 import { supabase } from './lib/supabase';
 import { Auth } from './components/Auth';
-import { BudgetList } from './components/BudgetList';
-import { BudgetDetail } from './components/BudgetDetail';
+import { Layout } from './components/Layout';
+import { Dashboard } from './components/Dashboard';
+import { ClientManagement } from './components/ClientManagement';
+import { BudgetManagement } from './components/BudgetManagement';
+import { ClientPortal } from './components/ClientPortal';
 import type { User } from '@supabase/supabase-js';
+import type { Profile } from './lib/database.types';
+
+type View = 'dashboard' | 'clients' | 'budgets';
 
 function App() {
   const [user, setUser] = useState<User | null>(null);
+  const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
-  const [selectedBudgetId, setSelectedBudgetId] = useState<string | null>(null);
+  const [currentView, setCurrentView] = useState<View>('dashboard');
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user ?? null);
-      setLoading(false);
+      if (session?.user) {
+        loadProfile(session.user.id);
+      } else {
+        setLoading(false);
+      }
     });
 
     const {
@@ -21,11 +32,28 @@ function App() {
     } = supabase.auth.onAuthStateChange((_event, session) => {
       (async () => {
         setUser(session?.user ?? null);
+        if (session?.user) {
+          loadProfile(session.user.id);
+        } else {
+          setProfile(null);
+          setLoading(false);
+        }
       })();
     });
 
     return () => subscription.unsubscribe();
   }, []);
+
+  const loadProfile = async (userId: string) => {
+    const { data } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', userId)
+      .maybeSingle();
+
+    setProfile(data);
+    setLoading(false);
+  };
 
   if (loading) {
     return (
@@ -39,37 +67,16 @@ function App() {
     return <Auth />;
   }
 
+  if (profile?.role === 'client') {
+    return <ClientPortal />;
+  }
+
   return (
-    <div className="h-screen flex overflow-hidden">
-      <div className="w-96 border-r border-slate-200 flex-shrink-0">
-        <BudgetList
-          onSelectBudget={setSelectedBudgetId}
-          selectedBudgetId={selectedBudgetId}
-        />
-      </div>
-      <div className="flex-1 overflow-hidden">
-        {selectedBudgetId ? (
-          <BudgetDetail budgetId={selectedBudgetId} />
-        ) : (
-          <div className="h-full flex flex-col items-center justify-center text-slate-400">
-            <svg
-              className="w-24 h-24 mb-4"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={1.5}
-                d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-              />
-            </svg>
-            <p className="text-lg">Selecione um orçamento para ver os detalhes</p>
-          </div>
-        )}
-      </div>
-    </div>
+    <Layout currentView={currentView} onViewChange={setCurrentView}>
+      {currentView === 'dashboard' && <Dashboard />}
+      {currentView === 'clients' && <ClientManagement />}
+      {currentView === 'budgets' && <BudgetManagement />}
+    </Layout>
   );
 }
 
