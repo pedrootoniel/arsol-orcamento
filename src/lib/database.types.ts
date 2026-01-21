@@ -55,6 +55,8 @@ export interface Database {
           address: string
           client_type: ClientType
           user_id: string | null
+          building_manager: string | null
+          is_active: boolean
           created_at: string
         }
         Insert: {
@@ -67,6 +69,8 @@ export interface Database {
           address?: string
           client_type?: ClientType
           user_id?: string | null
+          building_manager?: string | null
+          is_active?: boolean
           created_at?: string
         }
         Update: {
@@ -79,6 +83,8 @@ export interface Database {
           address?: string
           client_type?: ClientType
           user_id?: string | null
+          building_manager?: string | null
+          is_active?: boolean
           created_at?: string
         }
       }

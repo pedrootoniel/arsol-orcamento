@@ -1,26 +1,71 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
-import { LogOut, FileText, Calendar, Eye, Sun } from 'lucide-react';
-import { STATUS_CONFIG, formatCurrency, formatDate } from '../lib/constants';
+import {
+  LogOut,
+  FileText,
+  Calendar,
+  Eye,
+  Sun,
+  ClipboardList,
+  CheckCircle,
+  Clock,
+  User,
+} from 'lucide-react';
+import {
+  STATUS_CONFIG,
+  SERVICE_ORDER_STATUS_CONFIG,
+  formatCurrency,
+  formatDate,
+} from '../lib/constants';
 import { BudgetEditor } from './BudgetEditor';
-import type { Budget } from '../lib/database.types';
+import type { Budget, ServiceOrder } from '../lib/database.types';
+
+type Tab = 'budgets' | 'orders';
 
 export function ClientPortal() {
   const [budgets, setBudgets] = useState<Budget[]>([]);
+  const [orders, setOrders] = useState<ServiceOrder[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedBudgetId, setSelectedBudgetId] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<Tab>('budgets');
+  const [clientInfo, setClientInfo] = useState<any>(null);
 
   useEffect(() => {
-    loadBudgets();
+    loadData();
   }, []);
 
-  const loadBudgets = async () => {
-    const { data } = await supabase
-      .from('budgets')
-      .select('*')
-      .order('created_at', { ascending: false });
+  const loadData = async () => {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return;
 
-    if (data) setBudgets(data);
+    const { data: clientData } = await supabase
+      .from('clients')
+      .select('*')
+      .eq('user_id', user.id)
+      .maybeSingle();
+
+    if (clientData) {
+      setClientInfo(clientData);
+
+      const [budgetsRes, ordersRes] = await Promise.all([
+        supabase
+          .from('budgets')
+          .select('*')
+          .eq('client_id', clientData.id)
+          .order('created_at', { ascending: false }),
+        supabase
+          .from('service_orders')
+          .select('*, budgets(*)')
+          .eq('client_id', clientData.id)
+          .order('created_at', { ascending: false }),
+      ]);
+
+      if (budgetsRes.data) setBudgets(budgetsRes.data);
+      if (ordersRes.data) setOrders(ordersRes.data);
+    }
+
     setLoading(false);
   };
 
@@ -49,7 +94,7 @@ export function ClientPortal() {
   return (
     <div className="min-h-screen bg-slate-100">
       <header className="bg-white shadow-sm border-b border-slate-200">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 py-3 sm:py-4">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-3 sm:py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2 sm:gap-3">
               <div className="w-8 h-8 sm:w-10 sm:h-10 bg-emerald-500 rounded-lg flex items-center justify-center">
@@ -60,126 +105,228 @@ export function ClientPortal() {
                 <p className="text-xs text-slate-500 hidden sm:block">Portal do Cliente</p>
               </div>
             </div>
-            <button
-              onClick={handleSignOut}
-              className="flex items-center gap-2 px-3 sm:px-4 py-2 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition text-sm"
-            >
-              <LogOut className="w-4 h-4 sm:w-5 sm:h-5" />
-              <span className="hidden sm:inline">Sair</span>
-            </button>
+            <div className="flex items-center gap-3">
+              {clientInfo && (
+                <div className="hidden md:flex items-center gap-2 px-3 py-1.5 bg-slate-50 rounded-lg">
+                  <User className="w-4 h-4 text-slate-600" />
+                  <span className="text-sm text-slate-700">{clientInfo.name}</span>
+                </div>
+              )}
+              <button
+                onClick={handleSignOut}
+                className="flex items-center gap-2 px-3 sm:px-4 py-2 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition text-sm"
+              >
+                <LogOut className="w-4 h-4 sm:w-5 sm:h-5" />
+                <span className="hidden sm:inline">Sair</span>
+              </button>
+            </div>
           </div>
         </div>
       </header>
 
-      <main className="max-w-5xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
+      <main className="max-w-6xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
         <div className="mb-6 sm:mb-8">
-          <h2 className="text-xl sm:text-2xl font-bold text-slate-900">Meus Orçamentos</h2>
+          <h2 className="text-xl sm:text-2xl font-bold text-slate-900 mb-2">
+            Bem-vindo ao seu Portal
+          </h2>
           <p className="text-slate-600 text-sm sm:text-base">
-            Visualize seus orçamentos e acompanhe o status de cada projeto
+            Acompanhe seus orçamentos e serviços em andamento
           </p>
         </div>
 
-        {budgets.length === 0 ? (
-          <div className="bg-white rounded-xl p-8 sm:p-12 text-center border border-slate-200">
-            <FileText className="w-12 h-12 sm:w-16 sm:h-16 text-slate-300 mx-auto mb-4" />
-            <p className="text-slate-500">Nenhum orçamento disponível</p>
-            <p className="text-slate-400 text-sm">
-              Quando seu orçamento for criado, ele aparecerá aqui
-            </p>
-          </div>
-        ) : (
-          <div className="grid gap-4">
-            {budgets.map((budget) => {
-              const total = budget.total_materials + budget.total_labor + budget.total_additional;
-              const isExpired =
-                budget.validity_date && new Date(budget.validity_date) < new Date();
+        <div className="flex gap-2 mb-6 border-b border-slate-200">
+          <button
+            onClick={() => setActiveTab('budgets')}
+            className={`flex items-center gap-2 px-4 py-3 font-medium transition border-b-2 ${
+              activeTab === 'budgets'
+                ? 'border-emerald-500 text-emerald-600'
+                : 'border-transparent text-slate-500 hover:text-slate-700'
+            }`}
+          >
+            <FileText className="w-5 h-5" />
+            <span>Orçamentos</span>
+            {budgets.length > 0 && (
+              <span className="px-2 py-0.5 bg-slate-200 text-slate-700 text-xs rounded-full">
+                {budgets.length}
+              </span>
+            )}
+          </button>
+          <button
+            onClick={() => setActiveTab('orders')}
+            className={`flex items-center gap-2 px-4 py-3 font-medium transition border-b-2 ${
+              activeTab === 'orders'
+                ? 'border-emerald-500 text-emerald-600'
+                : 'border-transparent text-slate-500 hover:text-slate-700'
+            }`}
+          >
+            <ClipboardList className="w-5 h-5" />
+            <span>Ordens de Serviço</span>
+            {orders.length > 0 && (
+              <span className="px-2 py-0.5 bg-slate-200 text-slate-700 text-xs rounded-full">
+                {orders.length}
+              </span>
+            )}
+          </button>
+        </div>
 
-              return (
-                <div
-                  key={budget.id}
-                  className="bg-white rounded-xl border border-slate-200 overflow-hidden hover:shadow-lg transition"
-                >
-                  <div className="p-4 sm:p-6">
-                    <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 sm:gap-4 mb-4">
-                      <div className="min-w-0">
-                        <h3 className="text-lg sm:text-xl font-semibold text-slate-900 mb-1 truncate">
-                          {budget.title}
-                        </h3>
-                        {budget.description && (
-                          <p className="text-slate-600 text-sm line-clamp-2">{budget.description}</p>
-                        )}
+        {activeTab === 'budgets' && (
+          <div>
+            {budgets.length === 0 ? (
+              <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-8 sm:p-12 text-center">
+                <FileText className="w-12 h-12 sm:w-16 sm:h-16 text-slate-300 mx-auto mb-4" />
+                <h3 className="text-lg font-semibold text-slate-900 mb-2">
+                  Nenhum orçamento ainda
+                </h3>
+                <p className="text-slate-500">
+                  Seus orçamentos aparecerão aqui quando forem criados
+                </p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 gap-4">
+                {budgets.map((budget) => {
+                  const total = budget.total_materials + budget.total_labor + budget.total_additional;
+                  return (
+                    <div
+                      key={budget.id}
+                      className="bg-white rounded-xl shadow-sm border border-slate-200 p-4 sm:p-6 hover:shadow-md transition"
+                    >
+                      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-2">
+                            <h3 className="font-semibold text-slate-900 text-base sm:text-lg truncate">
+                              {budget.title}
+                            </h3>
+                            <span
+                              className={`px-2 sm:px-3 py-1 rounded-full text-xs font-medium whitespace-nowrap ${
+                                STATUS_CONFIG[budget.status]?.color || STATUS_CONFIG.draft.color
+                              }`}
+                            >
+                              {STATUS_CONFIG[budget.status]?.label || budget.status}
+                            </span>
+                          </div>
+                          {budget.description && (
+                            <p className="text-sm text-slate-600 mb-3 line-clamp-2">
+                              {budget.description}
+                            </p>
+                          )}
+                          <div className="flex flex-wrap items-center gap-3 sm:gap-4 text-xs sm:text-sm text-slate-500">
+                            <span className="flex items-center gap-1">
+                              <Calendar className="w-4 h-4" />
+                              {formatDate(budget.created_at)}
+                            </span>
+                            {budget.validity_date && (
+                              <span>Válido até: {formatDate(budget.validity_date)}</span>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex flex-col sm:items-end gap-3">
+                          <div className="text-right">
+                            <p className="text-xs sm:text-sm text-slate-500 mb-1">Valor Total</p>
+                            <p className="text-lg sm:text-xl font-bold text-emerald-600">
+                              {formatCurrency(total)}
+                            </p>
+                          </div>
+                          <button
+                            onClick={() => setSelectedBudgetId(budget.id)}
+                            className="flex items-center justify-center gap-2 px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg transition text-sm font-medium w-full sm:w-auto"
+                          >
+                            <Eye className="w-4 h-4" />
+                            Ver Detalhes
+                          </button>
+                        </div>
                       </div>
-                      <span
-                        className={`px-3 py-1 rounded-full text-xs sm:text-sm font-medium self-start whitespace-nowrap ${
-                          isExpired
-                            ? STATUS_CONFIG.expired.color
-                            : STATUS_CONFIG[budget.status]?.color || STATUS_CONFIG.draft.color
-                        }`}
-                      >
-                        {isExpired ? 'Expirado' : STATUS_CONFIG[budget.status]?.label || budget.status}
-                      </span>
                     </div>
-
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-4 mb-4">
-                      <div className="bg-slate-50 rounded-lg p-2 sm:p-3">
-                        <p className="text-xs text-slate-500 mb-1">Materiais</p>
-                        <p className="font-semibold text-slate-900 text-sm sm:text-base truncate">
-                          {formatCurrency(budget.total_materials)}
-                        </p>
-                      </div>
-                      <div className="bg-slate-50 rounded-lg p-2 sm:p-3">
-                        <p className="text-xs text-slate-500 mb-1">Mão de Obra</p>
-                        <p className="font-semibold text-slate-900 text-sm sm:text-base truncate">
-                          {formatCurrency(budget.total_labor)}
-                        </p>
-                      </div>
-                      <div className="bg-slate-50 rounded-lg p-2 sm:p-3">
-                        <p className="text-xs text-slate-500 mb-1">Adicionais</p>
-                        <p className="font-semibold text-slate-900 text-sm sm:text-base truncate">
-                          {formatCurrency(budget.total_additional)}
-                        </p>
-                      </div>
-                      <div className="bg-emerald-50 rounded-lg p-2 sm:p-3">
-                        <p className="text-xs text-emerald-600 mb-1">Total</p>
-                        <p className="font-bold text-emerald-700 text-sm sm:text-base truncate">{formatCurrency(total)}</p>
-                      </div>
-                    </div>
-
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                      <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 text-xs sm:text-sm text-slate-500">
-                        <span className="flex items-center gap-1">
-                          <Calendar className="w-4 h-4" />
-                          Criado em {formatDate(budget.created_at)}
-                        </span>
-                        {budget.validity_date && (
-                          <span className={isExpired ? 'text-red-500' : ''}>
-                            Validade: {formatDate(budget.validity_date)}
-                          </span>
-                        )}
-                      </div>
-                      <button
-                        onClick={() => setSelectedBudgetId(budget.id)}
-                        className="flex items-center justify-center gap-2 px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg transition text-sm w-full sm:w-auto"
-                      >
-                        <Eye className="w-4 h-4" />
-                        Ver Detalhes
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
+                  );
+                })}
+              </div>
+            )}
           </div>
         )}
 
-        <div className="mt-6 sm:mt-8 bg-amber-50 border border-amber-200 rounded-xl p-4 sm:p-6">
-          <h3 className="font-semibold text-amber-800 mb-2 text-sm sm:text-base">Informação Importante</h3>
-          <p className="text-amber-700 text-xs sm:text-sm">
-            Os valores apresentados são apenas para visualização. Caso deseje solicitar algum ajuste
-            ou tenha dúvidas, utilize a aba "Comentários" dentro de cada orçamento para se comunicar
-            com nossa equipe.
-          </p>
-        </div>
+        {activeTab === 'orders' && (
+          <div>
+            {orders.length === 0 ? (
+              <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-8 sm:p-12 text-center">
+                <ClipboardList className="w-12 h-12 sm:w-16 sm:h-16 text-slate-300 mx-auto mb-4" />
+                <h3 className="text-lg font-semibold text-slate-900 mb-2">
+                  Nenhuma ordem de serviço ainda
+                </h3>
+                <p className="text-slate-500">
+                  Suas ordens de serviço aparecerão aqui quando os trabalhos forem iniciados
+                </p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 gap-4">
+                {orders.map((order) => {
+                  const getStatusIcon = () => {
+                    switch (order.status) {
+                      case 'pending':
+                        return <Clock className="w-5 h-5" />;
+                      case 'in_progress':
+                        return <ClipboardList className="w-5 h-5" />;
+                      case 'completed':
+                        return <CheckCircle className="w-5 h-5" />;
+                      default:
+                        return <ClipboardList className="w-5 h-5" />;
+                    }
+                  };
+
+                  return (
+                    <div
+                      key={order.id}
+                      className="bg-white rounded-xl shadow-sm border border-slate-200 p-4 sm:p-6"
+                    >
+                      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-2">
+                            <h3 className="font-semibold text-slate-900 text-base sm:text-lg">
+                              OS {order.order_number}
+                            </h3>
+                            <span
+                              className={`px-2 sm:px-3 py-1 rounded-full text-xs font-medium flex items-center gap-1 ${
+                                SERVICE_ORDER_STATUS_CONFIG[order.status]?.color
+                              }`}
+                            >
+                              {getStatusIcon()}
+                              {SERVICE_ORDER_STATUS_CONFIG[order.status]?.label}
+                            </span>
+                          </div>
+                          {order.budgets && (
+                            <p className="text-sm text-slate-700 mb-3 font-medium">
+                              {order.budgets.title}
+                            </p>
+                          )}
+                          <div className="flex flex-wrap gap-3 sm:gap-4 text-xs sm:text-sm text-slate-500">
+                            {order.start_date && (
+                              <span className="flex items-center gap-1">
+                                <Calendar className="w-4 h-4" />
+                                Início: {formatDate(order.start_date)}
+                              </span>
+                            )}
+                            {order.deadline_date && (
+                              <span>Prazo: {formatDate(order.deadline_date)}</span>
+                            )}
+                            {order.completion_date && (
+                              <span>Concluído: {formatDate(order.completion_date)}</span>
+                            )}
+                          </div>
+                          {order.technical_notes && (
+                            <div className="mt-3 p-3 bg-slate-50 rounded-lg">
+                              <p className="text-xs font-medium text-slate-700 mb-1">
+                                Observações Técnicas:
+                              </p>
+                              <p className="text-sm text-slate-600">{order.technical_notes}</p>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
       </main>
     </div>
   );

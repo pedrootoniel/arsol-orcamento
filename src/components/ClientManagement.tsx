@@ -13,6 +13,9 @@ import {
   Home,
   Factory,
   X,
+  Key,
+  UserCheck,
+  UserX,
 } from 'lucide-react';
 import { CLIENT_TYPE_CONFIG, formatDate } from '../lib/constants';
 import type { Client, ClientType } from '../lib/database.types';
@@ -35,6 +38,8 @@ export function ClientManagement() {
     email: '',
     phone: '',
     address: '',
+    building_manager: '',
+    password: '',
     client_type: 'residential' as ClientType,
   });
 
@@ -53,29 +58,93 @@ export function ClientManagement() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
+    const { data: { user: adminUser } } = await supabase.auth.getUser();
+    if (!adminUser) return;
 
-    if (editingClient) {
-      const { error } = await supabase
-        .from('clients')
-        .update(formData)
-        .eq('id', editingClient.id);
-      if (!error) {
-        setClients(clients.map((c) => (c.id === editingClient.id ? { ...c, ...formData } : c)));
+    try {
+      if (editingClient) {
+        const updateData: any = {
+          name: formData.name,
+          document: formData.document,
+          email: formData.email,
+          phone: formData.phone,
+          address: formData.address,
+          building_manager: formData.building_manager,
+          client_type: formData.client_type,
+        };
+
+        const { error } = await supabase
+          .from('clients')
+          .update(updateData)
+          .eq('id', editingClient.id);
+
+        if (!error) {
+          setClients(clients.map((c) => (c.id === editingClient.id ? { ...c, ...updateData } : c)));
+        }
+      } else {
+        let clientUserId = null;
+
+        if (formData.email && formData.password) {
+          const { data: authData, error: authError } = await supabase.auth.signUp({
+            email: formData.email,
+            password: formData.password,
+            options: {
+              data: {
+                full_name: formData.name,
+              },
+            },
+          });
+
+          if (!authError && authData.user) {
+            clientUserId = authData.user.id;
+
+            await supabase.from('profiles').upsert({
+              id: authData.user.id,
+              role: 'client',
+              full_name: formData.name,
+              phone: formData.phone,
+            });
+          }
+        }
+
+        const { data, error } = await supabase
+          .from('clients')
+          .insert({
+            admin_id: adminUser.id,
+            user_id: clientUserId,
+            name: formData.name,
+            document: formData.document,
+            email: formData.email,
+            phone: formData.phone,
+            address: formData.address,
+            building_manager: formData.building_manager,
+            client_type: formData.client_type,
+            is_active: true,
+          })
+          .select()
+          .single();
+
+        if (!error && data) {
+          setClients([data, ...clients]);
+        }
       }
-    } else {
-      const { data, error } = await supabase
-        .from('clients')
-        .insert({ ...formData, admin_id: user.id })
-        .select()
-        .single();
-      if (!error && data) {
-        setClients([data, ...clients]);
-      }
+
+      closeModal();
+    } catch (error) {
+      console.error('Error saving client:', error);
+      alert('Erro ao salvar cliente. Verifique os dados e tente novamente.');
     }
+  };
 
-    closeModal();
+  const toggleActive = async (client: Client) => {
+    const { error } = await supabase
+      .from('clients')
+      .update({ is_active: !client.is_active })
+      .eq('id', client.id);
+
+    if (!error) {
+      setClients(clients.map((c) => (c.id === client.id ? { ...c, is_active: !c.is_active } : c)));
+    }
   };
 
   const handleDelete = async (id: string) => {
@@ -94,6 +163,8 @@ export function ClientManagement() {
       email: client.email,
       phone: client.phone,
       address: client.address,
+      building_manager: client.building_manager || '',
+      password: '',
       client_type: client.client_type,
     });
     setShowModal(true);
@@ -108,6 +179,8 @@ export function ClientManagement() {
       email: '',
       phone: '',
       address: '',
+      building_manager: '',
+      password: '',
       client_type: 'residential',
     });
   };
@@ -165,52 +238,79 @@ export function ClientManagement() {
         ) : (
           <div className="divide-y divide-slate-200">
             {filteredClients.map((client) => {
-              const TypeIcon = clientTypeIcons[client.client_type];
+              const Icon = clientTypeIcons[client.client_type];
               return (
                 <div key={client.id} className="p-4 hover:bg-slate-50 transition">
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex gap-3 sm:gap-4 flex-1 min-w-0">
-                      <div className="w-10 h-10 sm:w-12 sm:h-12 bg-emerald-100 rounded-full flex items-center justify-center flex-shrink-0">
-                        <TypeIcon className="w-5 h-5 sm:w-6 sm:h-6 text-emerald-600" />
+                      <div
+                        className={`w-10 h-10 sm:w-12 sm:h-12 rounded-full flex items-center justify-center flex-shrink-0 ${
+                          client.is_active ? 'bg-emerald-100' : 'bg-slate-100'
+                        }`}
+                      >
+                        <Icon
+                          className={`w-5 h-5 sm:w-6 sm:h-6 ${
+                            client.is_active ? 'text-emerald-600' : 'text-slate-400'
+                          }`}
+                        />
                       </div>
                       <div className="min-w-0 flex-1">
-                        <h3 className="font-semibold text-slate-900 text-sm sm:text-base truncate">{client.name}</h3>
-                        <div className="flex flex-col sm:flex-row sm:flex-wrap gap-1 sm:gap-4 mt-1 text-xs sm:text-sm text-slate-600">
-                          {client.document && (
-                            <span className="truncate">
-                              <span className="text-slate-400 hidden sm:inline">CPF/CNPJ:</span> {client.document}
+                        <div className="flex items-center gap-2 mb-1">
+                          <h3 className="font-semibold text-slate-900 text-sm sm:text-base truncate">
+                            {client.name}
+                          </h3>
+                          {!client.is_active && (
+                            <span className="text-xs text-red-600 bg-red-100 px-2 py-0.5 rounded-full">
+                              Inativo
                             </span>
                           )}
-                          {client.email && (
-                            <span className="flex items-center gap-1 truncate">
-                              <Mail className="w-3 h-3 sm:w-4 sm:h-4 text-slate-400 flex-shrink-0" />
-                              <span className="truncate">{client.email}</span>
-                            </span>
-                          )}
-                          {client.phone && (
-                            <span className="flex items-center gap-1">
-                              <Phone className="w-3 h-3 sm:w-4 sm:h-4 text-slate-400 flex-shrink-0" />
-                              {client.phone}
+                          {client.user_id && (
+                            <span className="text-xs text-emerald-600 bg-emerald-100 px-2 py-0.5 rounded-full">
+                              Acesso
                             </span>
                           )}
                         </div>
-                        {client.address && (
-                          <p className="flex items-center gap-1 mt-1 text-xs sm:text-sm text-slate-500 truncate">
-                            <MapPin className="w-3 h-3 sm:w-4 sm:h-4 flex-shrink-0" />
+                        <div className="flex flex-col sm:flex-row sm:flex-wrap gap-1 sm:gap-4 text-xs sm:text-sm text-slate-600">
+                          <span className="flex items-center gap-1 truncate">
+                            <Mail className="w-3 h-3 sm:w-4 sm:h-4 text-slate-400 flex-shrink-0" />
+                            <span className="truncate">{client.email}</span>
+                          </span>
+                          <span className="flex items-center gap-1">
+                            <Phone className="w-3 h-3 sm:w-4 sm:h-4 text-slate-400 flex-shrink-0" />
+                            {client.phone}
+                          </span>
+                          <span className="flex items-center gap-1 truncate">
+                            <MapPin className="w-3 h-3 sm:w-4 sm:h-4 text-slate-400 flex-shrink-0" />
                             <span className="truncate">{client.address}</span>
+                          </span>
+                        </div>
+                        {client.building_manager && (
+                          <p className="text-xs sm:text-sm text-slate-500 mt-1">
+                            Síndico/Zelador: {client.building_manager}
                           </p>
                         )}
                         <div className="flex items-center gap-2 sm:gap-3 mt-2">
-                          <span className="px-2 py-0.5 sm:py-1 bg-slate-100 text-slate-600 text-xs rounded-full">
+                          <span className="text-xs px-2 py-0.5 sm:py-1 bg-slate-100 text-slate-600 rounded-full">
                             {CLIENT_TYPE_CONFIG[client.client_type].label}
                           </span>
                           <span className="text-xs text-slate-400 hidden sm:inline">
-                            Cadastrado em {formatDate(client.created_at)}
+                            Desde {formatDate(client.created_at)}
                           </span>
                         </div>
                       </div>
                     </div>
                     <div className="flex gap-1 sm:gap-2 flex-shrink-0">
+                      <button
+                        onClick={() => toggleActive(client)}
+                        className={`p-1.5 sm:p-2 rounded-lg transition ${
+                          client.is_active
+                            ? 'text-amber-600 hover:bg-amber-50'
+                            : 'text-emerald-600 hover:bg-emerald-50'
+                        }`}
+                        title={client.is_active ? 'Desativar' : 'Ativar'}
+                      >
+                        {client.is_active ? <UserX className="w-4 h-4" /> : <UserCheck className="w-4 h-4" />}
+                      </button>
                       <button
                         onClick={() => openEditModal(client)}
                         className="p-1.5 sm:p-2 text-slate-600 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition"
@@ -234,7 +334,7 @@ export function ClientManagement() {
 
       {showModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between p-4 sm:p-6 border-b border-slate-200 sticky top-0 bg-white">
               <h2 className="text-lg sm:text-xl font-bold text-slate-900">
                 {editingClient ? 'Editar Cliente' : 'Novo Cliente'}
@@ -244,78 +344,124 @@ export function ClientManagement() {
               </button>
             </div>
             <form onSubmit={handleSubmit} className="p-4 sm:p-6 space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">
-                  Nome Completo / Razão Social *
-                </label>
-                <input
-                  type="text"
-                  value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none"
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">
-                  CPF / CNPJ
-                </label>
-                <input
-                  type="text"
-                  value={formData.document}
-                  onChange={(e) => setFormData({ ...formData, document: e.target.value })}
-                  className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none"
-                />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">
+                    Nome / Razão Social *
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.name}
+                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                    className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">
+                    CPF / CNPJ *
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.document}
+                    onChange={(e) => setFormData({ ...formData, document: e.target.value })}
+                    className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none"
+                    required
+                  />
+                </div>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">Email</label>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">Email *</label>
                   <input
                     type="email"
                     value={formData.email}
                     onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                     className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none"
+                    required
                   />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-2">
-                    Telefone / WhatsApp
+                    Telefone / WhatsApp *
                   </label>
                   <input
-                    type="text"
+                    type="tel"
                     value={formData.phone}
                     onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
                     className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none"
+                    required
                   />
                 </div>
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-2">
-                  Endereço da Obra
+                  Síndico / Zelador
+                </label>
+                <input
+                  type="text"
+                  value={formData.building_manager}
+                  onChange={(e) => setFormData({ ...formData, building_manager: e.target.value })}
+                  className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none"
+                  placeholder="Nome do síndico ou zelador do prédio"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">
+                  Endereço Completo *
                 </label>
                 <input
                   type="text"
                   value={formData.address}
                   onChange={(e) => setFormData({ ...formData, address: e.target.value })}
                   className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none"
+                  required
                 />
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-2">
-                  Tipo de Cliente
+                  Tipo de Cliente *
                 </label>
                 <select
                   value={formData.client_type}
-                  onChange={(e) =>
-                    setFormData({ ...formData, client_type: e.target.value as ClientType })
-                  }
+                  onChange={(e) => setFormData({ ...formData, client_type: e.target.value as ClientType })}
                   className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none"
+                  required
                 >
                   <option value="residential">Residencial</option>
                   <option value="commercial">Comercial</option>
                   <option value="industrial">Industrial</option>
                 </select>
               </div>
+              {!editingClient && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
+                  <div className="sm:col-span-2">
+                    <p className="text-sm font-medium text-blue-900 mb-2">
+                      Criar acesso ao portal do cliente
+                    </p>
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label className="block text-sm font-medium text-slate-700 mb-2">
+                      Senha de Acesso {!editingClient && '*'}
+                    </label>
+                    <div className="relative">
+                      <Key className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+                      <input
+                        type="password"
+                        value={formData.password}
+                        onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                        className="w-full pl-10 pr-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none"
+                        placeholder="Mínimo 6 caracteres"
+                        minLength={6}
+                        required={!editingClient}
+                      />
+                    </div>
+                    <p className="text-xs text-slate-500 mt-1">
+                      Esta senha será usada pelo cliente para acessar o portal
+                    </p>
+                  </div>
+                </div>
+              )}
               <div className="flex flex-col-reverse sm:flex-row gap-3 pt-4">
                 <button
                   type="button"
@@ -328,7 +474,7 @@ export function ClientManagement() {
                   type="submit"
                   className="flex-1 px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg transition"
                 >
-                  {editingClient ? 'Salvar' : 'Criar'}
+                  {editingClient ? 'Salvar' : 'Criar Cliente'}
                 </button>
               </div>
             </form>

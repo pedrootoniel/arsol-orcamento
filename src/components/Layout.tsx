@@ -9,11 +9,10 @@ import {
   Sun,
   ClipboardList,
   DollarSign,
-  Shield,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
-type View = 'dashboard' | 'clients' | 'budgets' | 'orders' | 'financial' | 'users';
+type View = 'dashboard' | 'clients' | 'budgets' | 'orders' | 'financial';
 
 interface Props {
   currentView: View;
@@ -57,7 +56,6 @@ export function Layout({ currentView, onViewChange, children }: Props) {
     { id: 'budgets' as View, label: 'Orçamentos', icon: FileText },
     { id: 'orders' as View, label: 'Ordens de Serviço', icon: ClipboardList },
     { id: 'financial' as View, label: 'Financeiro', icon: DollarSign },
-    { id: 'users' as View, label: 'Usuários', icon: Shield },
   ];
 
   return (
