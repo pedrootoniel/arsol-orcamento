@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
-import { FileText, Users, DollarSign, Clock, TrendingUp, CheckCircle } from 'lucide-react';
+import { FileText, Users, DollarSign, Clock } from 'lucide-react';
 import { formatCurrency, STATUS_CONFIG } from '../lib/constants';
 import type { Budget, Client } from '../lib/database.types';
 
@@ -43,71 +43,71 @@ export function Dashboard() {
   }
 
   return (
-    <div className="h-full overflow-y-auto p-8">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-slate-900">Dashboard</h1>
-        <p className="text-slate-600">Visão geral do sistema de orçamentos</p>
+    <div className="h-full overflow-y-auto p-4 sm:p-6 lg:p-8">
+      <div className="mb-6 lg:mb-8">
+        <h1 className="text-2xl sm:text-3xl font-bold text-slate-900">Dashboard</h1>
+        <p className="text-slate-600 text-sm sm:text-base">Visão geral do sistema de orçamentos</p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-        <div className="bg-white rounded-xl p-6 shadow-sm border border-slate-200">
-          <div className="flex items-center justify-between mb-4">
-            <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
-              <FileText className="w-6 h-6 text-blue-600" />
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 lg:gap-6 mb-6 lg:mb-8">
+        <div className="bg-white rounded-xl p-4 sm:p-6 shadow-sm border border-slate-200">
+          <div className="flex items-center justify-between mb-3 sm:mb-4">
+            <div className="w-10 h-10 sm:w-12 sm:h-12 bg-blue-100 rounded-lg flex items-center justify-center">
+              <FileText className="w-5 h-5 sm:w-6 sm:h-6 text-blue-600" />
             </div>
-            <span className="text-3xl font-bold text-slate-900">{stats.totalBudgets}</span>
+            <span className="text-2xl sm:text-3xl font-bold text-slate-900">{stats.totalBudgets}</span>
           </div>
-          <h3 className="text-slate-600 font-medium">Total de Orçamentos</h3>
+          <h3 className="text-slate-600 font-medium text-xs sm:text-sm">Total de Orçamentos</h3>
         </div>
 
-        <div className="bg-white rounded-xl p-6 shadow-sm border border-slate-200">
-          <div className="flex items-center justify-between mb-4">
-            <div className="w-12 h-12 bg-emerald-100 rounded-lg flex items-center justify-center">
-              <Users className="w-6 h-6 text-emerald-600" />
+        <div className="bg-white rounded-xl p-4 sm:p-6 shadow-sm border border-slate-200">
+          <div className="flex items-center justify-between mb-3 sm:mb-4">
+            <div className="w-10 h-10 sm:w-12 sm:h-12 bg-emerald-100 rounded-lg flex items-center justify-center">
+              <Users className="w-5 h-5 sm:w-6 sm:h-6 text-emerald-600" />
             </div>
-            <span className="text-3xl font-bold text-slate-900">{stats.totalClients}</span>
+            <span className="text-2xl sm:text-3xl font-bold text-slate-900">{stats.totalClients}</span>
           </div>
-          <h3 className="text-slate-600 font-medium">Clientes Cadastrados</h3>
+          <h3 className="text-slate-600 font-medium text-xs sm:text-sm">Clientes Cadastrados</h3>
         </div>
 
-        <div className="bg-white rounded-xl p-6 shadow-sm border border-slate-200">
-          <div className="flex items-center justify-between mb-4">
-            <div className="w-12 h-12 bg-amber-100 rounded-lg flex items-center justify-center">
-              <Clock className="w-6 h-6 text-amber-600" />
+        <div className="bg-white rounded-xl p-4 sm:p-6 shadow-sm border border-slate-200">
+          <div className="flex items-center justify-between mb-3 sm:mb-4">
+            <div className="w-10 h-10 sm:w-12 sm:h-12 bg-amber-100 rounded-lg flex items-center justify-center">
+              <Clock className="w-5 h-5 sm:w-6 sm:h-6 text-amber-600" />
             </div>
-            <span className="text-3xl font-bold text-slate-900">{stats.pendingBudgets}</span>
+            <span className="text-2xl sm:text-3xl font-bold text-slate-900">{stats.pendingBudgets}</span>
           </div>
-          <h3 className="text-slate-600 font-medium">Aguardando Resposta</h3>
+          <h3 className="text-slate-600 font-medium text-xs sm:text-sm">Aguardando Resposta</h3>
         </div>
 
-        <div className="bg-white rounded-xl p-6 shadow-sm border border-slate-200">
-          <div className="flex items-center justify-between mb-4">
-            <div className="w-12 h-12 bg-teal-100 rounded-lg flex items-center justify-center">
-              <DollarSign className="w-6 h-6 text-teal-600" />
+        <div className="bg-white rounded-xl p-4 sm:p-6 shadow-sm border border-slate-200 col-span-2 lg:col-span-1">
+          <div className="flex items-center justify-between mb-3 sm:mb-4">
+            <div className="w-10 h-10 sm:w-12 sm:h-12 bg-teal-100 rounded-lg flex items-center justify-center">
+              <DollarSign className="w-5 h-5 sm:w-6 sm:h-6 text-teal-600" />
             </div>
-            <span className="text-2xl font-bold text-slate-900">{formatCurrency(stats.totalValue)}</span>
+            <span className="text-lg sm:text-2xl font-bold text-slate-900 truncate ml-2">{formatCurrency(stats.totalValue)}</span>
           </div>
-          <h3 className="text-slate-600 font-medium">Valor Aprovado</h3>
+          <h3 className="text-slate-600 font-medium text-xs sm:text-sm">Valor Aprovado</h3>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 lg:gap-6">
         <div className="bg-white rounded-xl shadow-sm border border-slate-200">
-          <div className="p-6 border-b border-slate-200">
-            <h2 className="text-lg font-semibold text-slate-900">Orçamentos Recentes</h2>
+          <div className="p-4 sm:p-6 border-b border-slate-200">
+            <h2 className="text-base sm:text-lg font-semibold text-slate-900">Orçamentos Recentes</h2>
           </div>
-          <div className="p-6">
+          <div className="p-4 sm:p-6">
             {budgets.length === 0 ? (
               <p className="text-slate-500 text-center py-4">Nenhum orçamento ainda</p>
             ) : (
-              <div className="space-y-4">
+              <div className="space-y-3 sm:space-y-4">
                 {budgets.slice(0, 5).map((budget) => (
                   <div key={budget.id} className="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
-                    <div>
-                      <h3 className="font-medium text-slate-900">{budget.title}</h3>
-                      <p className="text-sm text-slate-500">{budget.client_name || 'Sem cliente'}</p>
+                    <div className="min-w-0 flex-1 mr-3">
+                      <h3 className="font-medium text-slate-900 text-sm sm:text-base truncate">{budget.title}</h3>
+                      <p className="text-xs sm:text-sm text-slate-500 truncate">{budget.client_name || 'Sem cliente'}</p>
                     </div>
-                    <span className={`px-3 py-1 rounded-full text-xs font-medium ${STATUS_CONFIG[budget.status]?.color || STATUS_CONFIG.draft.color}`}>
+                    <span className={`px-2 sm:px-3 py-1 rounded-full text-xs font-medium whitespace-nowrap ${STATUS_CONFIG[budget.status]?.color || STATUS_CONFIG.draft.color}`}>
                       {STATUS_CONFIG[budget.status]?.label || budget.status}
                     </span>
                   </div>
@@ -118,10 +118,10 @@ export function Dashboard() {
         </div>
 
         <div className="bg-white rounded-xl shadow-sm border border-slate-200">
-          <div className="p-6 border-b border-slate-200">
-            <h2 className="text-lg font-semibold text-slate-900">Status dos Orçamentos</h2>
+          <div className="p-4 sm:p-6 border-b border-slate-200">
+            <h2 className="text-base sm:text-lg font-semibold text-slate-900">Status dos Orçamentos</h2>
           </div>
-          <div className="p-6">
+          <div className="p-4 sm:p-6">
             <div className="space-y-4">
               {Object.entries(STATUS_CONFIG).map(([key, config]) => {
                 const count = budgets.filter((b) => b.status === key).length;
@@ -129,8 +129,8 @@ export function Dashboard() {
                 return (
                   <div key={key}>
                     <div className="flex items-center justify-between mb-1">
-                      <span className="text-sm text-slate-600">{config.label}</span>
-                      <span className="text-sm font-medium text-slate-900">{count}</span>
+                      <span className="text-xs sm:text-sm text-slate-600">{config.label}</span>
+                      <span className="text-xs sm:text-sm font-medium text-slate-900">{count}</span>
                     </div>
                     <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
                       <div

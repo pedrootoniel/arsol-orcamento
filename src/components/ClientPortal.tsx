@@ -49,39 +49,39 @@ export function ClientPortal() {
   return (
     <div className="min-h-screen bg-slate-100">
       <header className="bg-white shadow-sm border-b border-slate-200">
-        <div className="max-w-5xl mx-auto px-6 py-4">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 py-3 sm:py-4">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-emerald-500 rounded-lg flex items-center justify-center">
-                <Sun className="w-6 h-6 text-white" />
+            <div className="flex items-center gap-2 sm:gap-3">
+              <div className="w-8 h-8 sm:w-10 sm:h-10 bg-emerald-500 rounded-lg flex items-center justify-center">
+                <Sun className="w-4 h-4 sm:w-6 sm:h-6 text-white" />
               </div>
               <div>
-                <h1 className="font-bold text-lg text-slate-900">ArsolUp</h1>
-                <p className="text-xs text-slate-500">Portal do Cliente</p>
+                <h1 className="font-bold text-base sm:text-lg text-slate-900">ArsolUp</h1>
+                <p className="text-xs text-slate-500 hidden sm:block">Portal do Cliente</p>
               </div>
             </div>
             <button
               onClick={handleSignOut}
-              className="flex items-center gap-2 px-4 py-2 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition"
+              className="flex items-center gap-2 px-3 sm:px-4 py-2 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition text-sm"
             >
-              <LogOut className="w-5 h-5" />
-              Sair
+              <LogOut className="w-4 h-4 sm:w-5 sm:h-5" />
+              <span className="hidden sm:inline">Sair</span>
             </button>
           </div>
         </div>
       </header>
 
-      <main className="max-w-5xl mx-auto px-6 py-8">
-        <div className="mb-8">
-          <h2 className="text-2xl font-bold text-slate-900">Meus Orçamentos</h2>
-          <p className="text-slate-600">
+      <main className="max-w-5xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
+        <div className="mb-6 sm:mb-8">
+          <h2 className="text-xl sm:text-2xl font-bold text-slate-900">Meus Orçamentos</h2>
+          <p className="text-slate-600 text-sm sm:text-base">
             Visualize seus orçamentos e acompanhe o status de cada projeto
           </p>
         </div>
 
         {budgets.length === 0 ? (
-          <div className="bg-white rounded-xl p-12 text-center border border-slate-200">
-            <FileText className="w-16 h-16 text-slate-300 mx-auto mb-4" />
+          <div className="bg-white rounded-xl p-8 sm:p-12 text-center border border-slate-200">
+            <FileText className="w-12 h-12 sm:w-16 sm:h-16 text-slate-300 mx-auto mb-4" />
             <p className="text-slate-500">Nenhum orçamento disponível</p>
             <p className="text-slate-400 text-sm">
               Quando seu orçamento for criado, ele aparecerá aqui
@@ -99,18 +99,18 @@ export function ClientPortal() {
                   key={budget.id}
                   className="bg-white rounded-xl border border-slate-200 overflow-hidden hover:shadow-lg transition"
                 >
-                  <div className="p-6">
-                    <div className="flex items-start justify-between mb-4">
-                      <div>
-                        <h3 className="text-xl font-semibold text-slate-900 mb-1">
+                  <div className="p-4 sm:p-6">
+                    <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 sm:gap-4 mb-4">
+                      <div className="min-w-0">
+                        <h3 className="text-lg sm:text-xl font-semibold text-slate-900 mb-1 truncate">
                           {budget.title}
                         </h3>
                         {budget.description && (
-                          <p className="text-slate-600 text-sm">{budget.description}</p>
+                          <p className="text-slate-600 text-sm line-clamp-2">{budget.description}</p>
                         )}
                       </div>
                       <span
-                        className={`px-3 py-1 rounded-full text-sm font-medium ${
+                        className={`px-3 py-1 rounded-full text-xs sm:text-sm font-medium self-start whitespace-nowrap ${
                           isExpired
                             ? STATUS_CONFIG.expired.color
                             : STATUS_CONFIG[budget.status]?.color || STATUS_CONFIG.draft.color
@@ -120,33 +120,33 @@ export function ClientPortal() {
                       </span>
                     </div>
 
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
-                      <div className="bg-slate-50 rounded-lg p-3">
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-4 mb-4">
+                      <div className="bg-slate-50 rounded-lg p-2 sm:p-3">
                         <p className="text-xs text-slate-500 mb-1">Materiais</p>
-                        <p className="font-semibold text-slate-900">
+                        <p className="font-semibold text-slate-900 text-sm sm:text-base truncate">
                           {formatCurrency(budget.total_materials)}
                         </p>
                       </div>
-                      <div className="bg-slate-50 rounded-lg p-3">
+                      <div className="bg-slate-50 rounded-lg p-2 sm:p-3">
                         <p className="text-xs text-slate-500 mb-1">Mão de Obra</p>
-                        <p className="font-semibold text-slate-900">
+                        <p className="font-semibold text-slate-900 text-sm sm:text-base truncate">
                           {formatCurrency(budget.total_labor)}
                         </p>
                       </div>
-                      <div className="bg-slate-50 rounded-lg p-3">
+                      <div className="bg-slate-50 rounded-lg p-2 sm:p-3">
                         <p className="text-xs text-slate-500 mb-1">Adicionais</p>
-                        <p className="font-semibold text-slate-900">
+                        <p className="font-semibold text-slate-900 text-sm sm:text-base truncate">
                           {formatCurrency(budget.total_additional)}
                         </p>
                       </div>
-                      <div className="bg-emerald-50 rounded-lg p-3">
+                      <div className="bg-emerald-50 rounded-lg p-2 sm:p-3">
                         <p className="text-xs text-emerald-600 mb-1">Total</p>
-                        <p className="font-bold text-emerald-700">{formatCurrency(total)}</p>
+                        <p className="font-bold text-emerald-700 text-sm sm:text-base truncate">{formatCurrency(total)}</p>
                       </div>
                     </div>
 
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-4 text-sm text-slate-500">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 text-xs sm:text-sm text-slate-500">
                         <span className="flex items-center gap-1">
                           <Calendar className="w-4 h-4" />
                           Criado em {formatDate(budget.created_at)}
@@ -159,7 +159,7 @@ export function ClientPortal() {
                       </div>
                       <button
                         onClick={() => setSelectedBudgetId(budget.id)}
-                        className="flex items-center gap-2 px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg transition"
+                        className="flex items-center justify-center gap-2 px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg transition text-sm w-full sm:w-auto"
                       >
                         <Eye className="w-4 h-4" />
                         Ver Detalhes
@@ -172,9 +172,9 @@ export function ClientPortal() {
           </div>
         )}
 
-        <div className="mt-8 bg-amber-50 border border-amber-200 rounded-xl p-6">
-          <h3 className="font-semibold text-amber-800 mb-2">Informação Importante</h3>
-          <p className="text-amber-700 text-sm">
+        <div className="mt-6 sm:mt-8 bg-amber-50 border border-amber-200 rounded-xl p-4 sm:p-6">
+          <h3 className="font-semibold text-amber-800 mb-2 text-sm sm:text-base">Informação Importante</h3>
+          <p className="text-amber-700 text-xs sm:text-sm">
             Os valores apresentados são apenas para visualização. Caso deseje solicitar algum ajuste
             ou tenha dúvidas, utilize a aba "Comentários" dentro de cada orçamento para se comunicar
             com nossa equipe.
