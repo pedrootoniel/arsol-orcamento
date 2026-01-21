@@ -17,6 +17,7 @@ import {
   HardHat,
   Settings,
   X,
+  ClipboardList,
 } from 'lucide-react';
 import { STATUS_CONFIG, CATEGORY_CONFIG, formatCurrency } from '../lib/constants';
 import { BudgetComments } from './BudgetComments';
@@ -93,6 +94,29 @@ export function BudgetEditor({ budgetId, onBack, readOnly = false }: Props) {
 
     if (!error && budget) {
       setBudget({ ...budget, ...updateData, status });
+    }
+  };
+
+  const createServiceOrder = async () => {
+    if (!budget || !budget.client_id) {
+      alert('Cliente não encontrado');
+      return;
+    }
+
+    const orderNumber = `OS-${Date.now()}`;
+
+    const { error } = await supabase.from('service_orders').insert({
+      budget_id: budget.id,
+      client_id: budget.client_id,
+      order_number: orderNumber,
+      status: 'pending',
+    });
+
+    if (error) {
+      alert('Erro ao criar ordem de serviço: ' + error.message);
+    } else {
+      alert('Ordem de serviço criada com sucesso! Número: ' + orderNumber);
+      loadBudget();
     }
   };
 
@@ -233,6 +257,15 @@ export function BudgetEditor({ budgetId, onBack, readOnly = false }: Props) {
                     <span className="hidden sm:inline">Reprovar</span>
                   </button>
                 </>
+              )}
+              {budget.status === 'approved' && (
+                <button
+                  onClick={createServiceOrder}
+                  className="flex items-center gap-1 sm:gap-2 px-2 sm:px-4 py-1.5 sm:py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition text-xs sm:text-sm"
+                >
+                  <ClipboardList className="w-3 h-3 sm:w-4 sm:h-4" />
+                  <span className="hidden sm:inline">Criar OS</span>
+                </button>
               )}
             </div>
           )}
