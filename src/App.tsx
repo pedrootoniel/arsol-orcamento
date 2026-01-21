@@ -6,10 +6,13 @@ import { Dashboard } from './components/Dashboard';
 import { ClientManagement } from './components/ClientManagement';
 import { BudgetManagement } from './components/BudgetManagement';
 import { ClientPortal } from './components/ClientPortal';
+import { ServiceOrdersManagement } from './components/ServiceOrdersManagement';
+import { FinancialManagement } from './components/FinancialManagement';
+import { UserManagement } from './components/UserManagement';
 import type { User } from '@supabase/supabase-js';
 import type { Profile } from './lib/database.types';
 
-type View = 'dashboard' | 'clients' | 'budgets';
+type View = 'dashboard' | 'clients' | 'budgets' | 'orders' | 'financial' | 'users';
 
 function App() {
   const [user, setUser] = useState<User | null>(null);
@@ -76,6 +79,9 @@ function App() {
       {currentView === 'dashboard' && <Dashboard />}
       {currentView === 'clients' && <ClientManagement />}
       {currentView === 'budgets' && <BudgetManagement />}
+      {currentView === 'orders' && <ServiceOrdersManagement />}
+      {currentView === 'financial' && <FinancialManagement />}
+      {currentView === 'users' && <UserManagement />}
     </Layout>
   );
 }

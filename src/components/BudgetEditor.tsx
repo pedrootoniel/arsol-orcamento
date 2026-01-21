@@ -63,14 +63,36 @@ export function BudgetEditor({ budgetId, onBack, readOnly = false }: Props) {
     setLoading(false);
   };
 
-  const updateBudgetStatus = async (status: BudgetStatus) => {
+  const updateBudgetStatus = async (status: BudgetStatus, notes: string = '') => {
+    const updateData: any = {
+      status,
+      updated_at: new Date().toISOString(),
+    };
+
+    if (status === 'approved') {
+      updateData.approval_date = new Date().toISOString();
+      updateData.approval_notes = notes;
+      updateData.is_locked = true;
+
+      try {
+        const ipResponse = await fetch('https://api.ipify.org?format=json');
+        const ipData = await ipResponse.json();
+        updateData.approval_ip = ipData.ip;
+      } catch (error) {
+        updateData.approval_ip = 'unknown';
+      }
+    } else if (status === 'rejected') {
+      updateData.rejection_date = new Date().toISOString();
+      updateData.rejection_reason = notes;
+    }
+
     const { error } = await supabase
       .from('budgets')
-      .update({ status, updated_at: new Date().toISOString() })
+      .update(updateData)
       .eq('id', budgetId);
 
     if (!error && budget) {
-      setBudget({ ...budget, status });
+      setBudget({ ...budget, ...updateData, status });
     }
   };
 
