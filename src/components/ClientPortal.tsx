@@ -10,6 +10,8 @@ import {
   CheckCircle,
   Clock,
   User,
+  FileSpreadsheet,
+  Download,
 } from 'lucide-react';
 import {
   STATUS_CONFIG,
@@ -20,11 +22,23 @@ import {
 import { BudgetEditor } from './BudgetEditor';
 import type { Budget, ServiceOrder } from '../lib/database.types';
 
-type Tab = 'budgets' | 'orders';
+interface NFeInvoice {
+  id: string;
+  nfe_number: string;
+  nfe_series: number;
+  nfe_key: string;
+  issue_date: string;
+  total_value: number;
+  status: string;
+  pdf_url: string;
+}
+
+type Tab = 'budgets' | 'orders' | 'nfe';
 
 export function ClientPortal() {
   const [budgets, setBudgets] = useState<Budget[]>([]);
   const [orders, setOrders] = useState<ServiceOrder[]>([]);
+  const [invoices, setInvoices] = useState<NFeInvoice[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedBudgetId, setSelectedBudgetId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<Tab>('budgets');
@@ -49,7 +63,7 @@ export function ClientPortal() {
     if (clientData) {
       setClientInfo(clientData);
 
-      const [budgetsRes, ordersRes] = await Promise.all([
+      const [budgetsRes, ordersRes, invoicesRes] = await Promise.all([
         supabase
           .from('budgets')
           .select('*')
@@ -60,10 +74,16 @@ export function ClientPortal() {
           .select('*, budgets(*)')
           .eq('client_id', clientData.id)
           .order('created_at', { ascending: false }),
+        supabase
+          .from('nfe_invoices')
+          .select('*')
+          .eq('client_id', clientData.id)
+          .order('created_at', { ascending: false }),
       ]);
 
       if (budgetsRes.data) setBudgets(budgetsRes.data);
       if (ordersRes.data) setOrders(ordersRes.data);
+      if (invoicesRes.data) setInvoices(invoicesRes.data);
     }
 
     setLoading(false);
@@ -164,6 +184,22 @@ export function ClientPortal() {
             {orders.length > 0 && (
               <span className="px-2 py-0.5 bg-slate-200 text-slate-700 text-xs rounded-full">
                 {orders.length}
+              </span>
+            )}
+          </button>
+          <button
+            onClick={() => setActiveTab('nfe')}
+            className={`flex items-center gap-2 px-4 py-3 font-medium transition border-b-2 ${
+              activeTab === 'nfe'
+                ? 'border-emerald-500 text-emerald-600'
+                : 'border-transparent text-slate-500 hover:text-slate-700'
+            }`}
+          >
+            <FileSpreadsheet className="w-5 h-5" />
+            <span>Notas Fiscais</span>
+            {invoices.length > 0 && (
+              <span className="px-2 py-0.5 bg-slate-200 text-slate-700 text-xs rounded-full">
+                {invoices.length}
               </span>
             )}
           </button>
@@ -323,6 +359,80 @@ export function ClientPortal() {
                     </div>
                   );
                 })}
+              </div>
+            )}
+          </div>
+        )}
+
+        {activeTab === 'nfe' && (
+          <div>
+            {invoices.length === 0 ? (
+              <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-8 sm:p-12 text-center">
+                <FileSpreadsheet className="w-12 h-12 sm:w-16 sm:h-16 text-slate-300 mx-auto mb-4" />
+                <h3 className="text-lg font-semibold text-slate-900 mb-2">
+                  Nenhuma nota fiscal ainda
+                </h3>
+                <p className="text-slate-500">
+                  Suas notas fiscais aparecerão aqui quando forem emitidas
+                </p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 gap-4">
+                {invoices.map((invoice) => (
+                  <div
+                    key={invoice.id}
+                    className="bg-white rounded-xl shadow-sm border border-slate-200 p-4 sm:p-6"
+                  >
+                    <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-2">
+                          <h3 className="font-semibold text-slate-900 text-base sm:text-lg">
+                            NFe {invoice.nfe_number} - Série {invoice.nfe_series}
+                          </h3>
+                          <span className={`px-2 sm:px-3 py-1 rounded-full text-xs font-medium ${
+                            invoice.status === 'authorized'
+                              ? 'bg-emerald-100 text-emerald-700'
+                              : invoice.status === 'cancelled'
+                              ? 'bg-red-100 text-red-700'
+                              : 'bg-slate-100 text-slate-700'
+                          }`}>
+                            {invoice.status === 'authorized' ? 'Autorizada' :
+                             invoice.status === 'cancelled' ? 'Cancelada' :
+                             invoice.status === 'processing' ? 'Processando' : 'Rascunho'}
+                          </span>
+                        </div>
+                        <div className="flex flex-wrap gap-3 sm:gap-4 text-xs sm:text-sm text-slate-500">
+                          <span className="flex items-center gap-1">
+                            <Calendar className="w-4 h-4" />
+                            {formatDate(invoice.issue_date)}
+                          </span>
+                          {invoice.nfe_key && (
+                            <span className="text-xs text-slate-400 font-mono truncate">
+                              Chave: {invoice.nfe_key.substring(0, 20)}...
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex flex-col sm:items-end gap-3">
+                        <div className="text-right">
+                          <p className="text-xs sm:text-sm text-slate-500 mb-1">Valor Total</p>
+                          <p className="text-lg sm:text-xl font-bold text-emerald-600">
+                            {formatCurrency(invoice.total_value)}
+                          </p>
+                        </div>
+                        {invoice.pdf_url && (
+                          <button
+                            onClick={() => window.open(invoice.pdf_url, '_blank')}
+                            className="flex items-center justify-center gap-2 px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg transition text-sm font-medium w-full sm:w-auto"
+                          >
+                            <Download className="w-4 h-4" />
+                            Download PDF
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
               </div>
             )}
           </div>

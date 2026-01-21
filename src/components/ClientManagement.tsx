@@ -42,6 +42,7 @@ export function ClientManagement() {
     password: '',
     client_type: 'residential' as ClientType,
   });
+  const [fetchingData, setFetchingData] = useState(false);
 
   useEffect(() => {
     loadClients();
@@ -95,15 +96,25 @@ export function ClientManagement() {
             },
           });
 
-          if (!authError && authData.user) {
+          if (authError) {
+            console.error('Auth error:', authError);
+            alert('Erro ao criar usuário: ' + authError.message);
+            return;
+          }
+
+          if (authData.user) {
             clientUserId = authData.user.id;
 
-            await supabase.from('profiles').upsert({
+            const { error: profileError } = await supabase.from('profiles').insert({
               id: authData.user.id,
               role: 'client',
               full_name: formData.name,
               phone: formData.phone,
             });
+
+            if (profileError) {
+              console.error('Profile error:', profileError);
+            }
           }
         }
 
@@ -124,15 +135,23 @@ export function ClientManagement() {
           .select()
           .single();
 
-        if (!error && data) {
+        if (error) {
+          console.error('Client insert error:', error);
+          alert('Erro ao criar cliente: ' + error.message);
+          return;
+        }
+
+        if (data) {
           setClients([data, ...clients]);
+          alert('Cliente criado com sucesso!');
         }
       }
 
       closeModal();
-    } catch (error) {
+      loadClients();
+    } catch (error: any) {
       console.error('Error saving client:', error);
-      alert('Erro ao salvar cliente. Verifique os dados e tente novamente.');
+      alert('Erro ao salvar cliente: ' + (error.message || 'Erro desconhecido'));
     }
   };
 
@@ -183,6 +202,30 @@ export function ClientManagement() {
       password: '',
       client_type: 'residential',
     });
+  };
+
+  const fetchCNPJData = async (cnpj: string) => {
+    const cleanCNPJ = cnpj.replace(/\D/g, '');
+    if (cleanCNPJ.length !== 14) return;
+
+    setFetchingData(true);
+    try {
+      const response = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${cleanCNPJ}`);
+      if (response.ok) {
+        const data = await response.json();
+        setFormData(prev => ({
+          ...prev,
+          name: data.razao_social || prev.name,
+          email: data.email || prev.email,
+          phone: data.ddd_telefone_1 || prev.phone,
+          address: `${data.logradouro}, ${data.numero} - ${data.bairro}, ${data.municipio} - ${data.uf}, ${data.cep}`,
+        }));
+      }
+    } catch (error) {
+      console.log('Erro ao buscar CNPJ:', error);
+    } finally {
+      setFetchingData(false);
+    }
   };
 
   const filteredClients = clients.filter(
@@ -361,13 +404,28 @@ export function ClientManagement() {
                   <label className="block text-sm font-medium text-slate-700 mb-2">
                     CPF / CNPJ *
                   </label>
-                  <input
-                    type="text"
-                    value={formData.document}
-                    onChange={(e) => setFormData({ ...formData, document: e.target.value })}
-                    className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none"
-                    required
-                  />
+                  <div className="relative">
+                    <input
+                      type="text"
+                      value={formData.document}
+                      onChange={(e) => setFormData({ ...formData, document: e.target.value })}
+                      onBlur={(e) => {
+                        const doc = e.target.value.replace(/\D/g, '');
+                        if (doc.length === 14) fetchCNPJData(doc);
+                      }}
+                      className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none"
+                      placeholder="00.000.000/0000-00"
+                      required
+                    />
+                    {fetchingData && (
+                      <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                        <div className="w-5 h-5 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
+                      </div>
+                    )}
+                  </div>
+                  <p className="text-xs text-slate-500 mt-1">
+                    Para CNPJ, os dados serão preenchidos automaticamente
+                  </p>
                 </div>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
