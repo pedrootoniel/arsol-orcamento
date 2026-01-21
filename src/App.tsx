@@ -8,10 +8,12 @@ import { BudgetManagement } from './components/BudgetManagement';
 import { ClientPortal } from './components/ClientPortal';
 import { ServiceOrdersManagement } from './components/ServiceOrdersManagement';
 import { FinancialManagement } from './components/FinancialManagement';
+import { UserProfile } from './components/UserProfile';
+import { NFeManagement } from './components/NFeManagement';
 import type { User } from '@supabase/supabase-js';
 import type { Profile } from './lib/database.types';
 
-type View = 'dashboard' | 'clients' | 'budgets' | 'orders' | 'financial';
+type View = 'dashboard' | 'clients' | 'budgets' | 'orders' | 'financial' | 'profile' | 'nfe';
 
 function App() {
   const [user, setUser] = useState<User | null>(null);
@@ -80,6 +82,8 @@ function App() {
       {currentView === 'budgets' && <BudgetManagement />}
       {currentView === 'orders' && <ServiceOrdersManagement />}
       {currentView === 'financial' && <FinancialManagement />}
+      {currentView === 'nfe' && <NFeManagement />}
+      {currentView === 'profile' && <UserProfile onBack={() => setCurrentView('dashboard')} />}
     </Layout>
   );
 }

@@ -2,11 +2,12 @@ import { useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { Mail, Lock, LogIn } from 'lucide-react';
 
+const ADMIN_EMAIL = 'pedrootonielsantos@outlook.com';
+
 export function Auth() {
   const [loading, setLoading] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [isSignUp, setIsSignUp] = useState(false);
   const [error, setError] = useState('');
 
   const handleAuth = async (e: React.FormEvent) => {
@@ -15,15 +16,28 @@ export function Auth() {
     setError('');
 
     try {
-      if (isSignUp) {
-        const { error } = await supabase.auth.signUp({ email, password });
-        if (error) throw error;
-      } else {
-        const { error } = await supabase.auth.signInWithPassword({ email, password });
-        if (error) throw error;
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) throw error;
+
+      if (data.user) {
+        const { data: existingProfile } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', data.user.id)
+          .maybeSingle();
+
+        if (!existingProfile) {
+          const isAdmin = data.user.email?.toLowerCase() === ADMIN_EMAIL.toLowerCase();
+          await supabase.from('profiles').insert({
+            id: data.user.id,
+            role: isAdmin ? 'admin' : 'client',
+            full_name: data.user.email?.split('@')[0] || '',
+            phone: '',
+          });
+        }
       }
     } catch (err: any) {
-      setError(err.message);
+      setError(err.message || 'Credenciais inválidas. Verifique seu email e senha.');
     } finally {
       setLoading(false);
     }
@@ -92,17 +106,12 @@ export function Auth() {
               disabled={loading}
               className="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-medium py-3 rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {loading ? 'Processando...' : isSignUp ? 'Criar Conta' : 'Entrar'}
+              {loading ? 'Processando...' : 'Entrar'}
             </button>
           </form>
 
-          <div className="mt-6 text-center">
-            <button
-              onClick={() => setIsSignUp(!isSignUp)}
-              className="text-emerald-600 hover:text-emerald-700 text-sm font-medium"
-            >
-              {isSignUp ? 'Já tem conta? Entre aqui' : 'Não tem conta? Crie uma'}
-            </button>
+          <div className="mt-6 text-center text-sm text-slate-500">
+            Não tem acesso? Entre em contato com o administrador.
           </div>
         </div>
       </div>

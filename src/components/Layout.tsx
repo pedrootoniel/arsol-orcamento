@@ -9,10 +9,13 @@ import {
   Sun,
   ClipboardList,
   DollarSign,
+  UserCircle,
+  FileSpreadsheet,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import type { Profile } from '../lib/database.types';
 
-type View = 'dashboard' | 'clients' | 'budgets' | 'orders' | 'financial';
+type View = 'dashboard' | 'clients' | 'budgets' | 'orders' | 'financial' | 'profile' | 'nfe';
 
 interface Props {
   currentView: View;
@@ -23,6 +26,7 @@ interface Props {
 export function Layout({ currentView, onViewChange, children }: Props) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
+  const [profile, setProfile] = useState<Profile | null>(null);
 
   useEffect(() => {
     const checkMobile = () => {
@@ -38,6 +42,23 @@ export function Layout({ currentView, onViewChange, children }: Props) {
     window.addEventListener('resize', checkMobile);
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
+
+  useEffect(() => {
+    loadProfile();
+  }, []);
+
+  const loadProfile = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    const { data } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', user.id)
+      .maybeSingle();
+
+    if (data) setProfile(data);
+  };
 
   const handleSignOut = async () => {
     await supabase.auth.signOut();
@@ -56,6 +77,7 @@ export function Layout({ currentView, onViewChange, children }: Props) {
     { id: 'budgets' as View, label: 'Orçamentos', icon: FileText },
     { id: 'orders' as View, label: 'Ordens de Serviço', icon: ClipboardList },
     { id: 'financial' as View, label: 'Financeiro', icon: DollarSign },
+    { id: 'nfe' as View, label: 'Notas Fiscais', icon: FileSpreadsheet },
   ];
 
   return (
@@ -123,7 +145,20 @@ export function Layout({ currentView, onViewChange, children }: Props) {
           ))}
         </nav>
 
-        <div className="p-4 border-t border-slate-700">
+        <div className="p-4 border-t border-slate-700 space-y-2">
+          <button
+            onClick={() => handleViewChange('profile')}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition ${
+              currentView === 'profile'
+                ? 'bg-emerald-500 text-white'
+                : 'text-slate-300 hover:bg-slate-800'
+            }`}
+          >
+            <UserCircle className="w-5 h-5 flex-shrink-0" />
+            <span className={sidebarOpen || isMobile ? 'block' : 'hidden lg:hidden'}>
+              Meu Perfil
+            </span>
+          </button>
           <button
             onClick={handleSignOut}
             className="w-full flex items-center gap-3 px-4 py-3 text-slate-300 hover:bg-slate-800 rounded-lg transition"
