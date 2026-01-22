@@ -121,6 +121,7 @@ export function BudgetEditor({ budgetId, onBack, readOnly = false }: Props) {
   };
 
 const addItem = async (newItem: any) => {
+  // Garantimos que os números sejam números e as strings sejam limpas
   const { data, error } = await supabase
     .from('budget_items')
     .insert({
@@ -130,7 +131,7 @@ const addItem = async (newItem: any) => {
       unit: newItem.unit,
       unit_price: Number(newItem.unit_price),
       total_price: Number(newItem.quantity) * Number(newItem.unit_price),
-      category: newItem.category // Agora o banco aceitará 'Energia Solar'
+      category: newItem.category.trim() // trim() evita erro de restrição por espaços
     })
     .select()
     .single();
@@ -138,8 +139,9 @@ const addItem = async (newItem: any) => {
   if (error) {
     alert("Erro ao salvar: " + error.message);
   } else {
-    setItems([...items, data]);
+    setItems(prev => [...prev, data]);
     setShowAddItem(false);
+    // Chame sua função de atualizar totais aqui se houver
   }
 };
   const deleteItem = async (itemId: string) => {
