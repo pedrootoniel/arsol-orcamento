@@ -120,39 +120,28 @@ export function BudgetEditor({ budgetId, onBack, readOnly = false }: Props) {
     }
   };
 
-const addItem = async (item) => {
-  const { data: { user } } = await supabase.auth.getUser();
-  
-  if (!user) {
-    alert("Sessão expirada. Faça login novamente.");
-    return;
-  }
-
-  // Calculando o total_price explicitamente para evitar erro 400
-  const totalPrice = item.quantity * item.unit_price;
-
+const addItem = async (newItem: any) => {
   const { data, error } = await supabase
     .from('budget_items')
     .insert({
       budget_id: budgetId,
-      description: item.description,
-      quantity: item.quantity,    // Verifique se no banco é 'quantity' ou 'quant'
-      unit: item.unit,
-      unit_price: item.unit_price,
-      total_price: totalPrice,    // Campo obrigatório visto no print
-      category: item.category,
-      // Se houver campos técnicos, certifique-se que o banco aceita JSONB
+      description: newItem.description,
+      quantity: Number(newItem.quantity),
+      unit: newItem.unit,
+      unit_price: Number(newItem.unit_price),
+      total_price: Number(newItem.quantity) * Number(newItem.unit_price),
+      category: newItem.category // Agora o banco aceitará 'Energia Solar'
     })
-      .select()
-      .single();
+    .select()
+    .single();
 
-    if (!error && data) {
-      setItems([...items, data]);
-      setShowAddItem(false);
-      updateTotals([...items, data]);
-    }
-  };
-
+  if (error) {
+    alert("Erro ao salvar: " + error.message);
+  } else {
+    setItems([...items, data]);
+    setShowAddItem(false);
+  }
+};
   const deleteItem = async (itemId: string) => {
     const { error } = await supabase.from('budget_items').delete().eq('id', itemId);
     if (!error) {

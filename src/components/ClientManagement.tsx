@@ -43,82 +43,94 @@ export function ClientManagement() {
     client_type: 'residential' as ClientType,
   });
   const [fetchingData, setFetchingData] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     loadClients();
   }, []);
 
   const loadClients = async () => {
-    const { data } = await supabase
-      .from('clients')
-      .select('*')
-      .order('created_at', { ascending: false });
-    if (data) setClients(data);
-    setLoading(false);
+    try {
+      const { data, error } = await supabase
+        .from('clients')
+        .select('*')
+        .order('created_at', { ascending: false });
+      
+      if (error) throw error;
+      if (data) setClients(data);
+    } catch (error: any) {
+      console.error('Erro ao carregar clientes:', error.message);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (submitting) return;
+    
+    setSubmitting(true);
     const { data: { user: adminUser } } = await supabase.auth.getUser();
-    if (!adminUser) return;
+    
+    if (!adminUser) {
+      alert("Sessão expirada. Faça login novamente.");
+      setSubmitting(false);
+      return;
+    }
 
     try {
       if (editingClient) {
-        const updateData: any = {
-          name: formData.name,
-          document: formData.document,
-          email: formData.email,
-          phone: formData.phone,
-          address: formData.address,
-          building_manager: formData.building_manager,
-          client_type: formData.client_type,
-        };
-
-        const { error } = await supabase
+        // --- LÓGICA DE ATUALIZAÇÃO ---
+        const { error: updateError } = await supabase
           .from('clients')
-          .update(updateData)
+          .update({
+            name: formData.name,
+            document: formData.document,
+            email: formData.email,
+            phone: formData.phone,
+            address: formData.address,
+            building_manager: formData.building_manager,
+            client_type: formData.client_type,
+          })
           .eq('id', editingClient.id);
 
-        if (!error) {
-          setClients(clients.map((c) => (c.id === editingClient.id ? { ...c, ...updateData } : c)));
-        }
+        if (updateError) throw updateError;
+        alert('Cliente atualizado com sucesso!');
       } else {
+        // --- LÓGICA DE CRIAÇÃO ---
         let clientUserId = null;
 
+        // 1. Criar usuário no Auth (se houver senha)
         if (formData.email && formData.password) {
           const { data: authData, error: authError } = await supabase.auth.signUp({
             email: formData.email,
             password: formData.password,
-            options: {
-              data: {
-                full_name: formData.name,
-              },
-            },
+            options: { data: { full_name: formData.name } },
           });
 
           if (authError) {
-            console.error('Auth error:', authError);
-            alert('Erro ao criar usuário: ' + authError.message);
-            return;
+            if (authError.status === 409 || authError.message.includes("already registered")) {
+              throw new Error("Este e-mail já está cadastrado no sistema.");
+            }
+            throw authError;
           }
 
           if (authData.user) {
             clientUserId = authData.user.id;
-
+            
+            // 2. Criar Perfil do usuário
             const { error: profileError } = await supabase.from('profiles').insert({
-              id: authData.user.id,
+              id: clientUserId,
               role: 'client',
               full_name: formData.name,
               phone: formData.phone,
             });
-
-            if (profileError) {
-              console.error('Profile error:', profileError);
-            }
+            if (profileError) console.error('Erro ao criar perfil:', profileError.message);
           }
         }
 
-        const { data, error } = await supabase
+        // 3. Inserir na tabela de Clientes
+        const { error: clientError } = await supabase
           .from('clients')
           .insert({
             admin_id: adminUser.id,
@@ -131,27 +143,25 @@ export function ClientManagement() {
             building_manager: formData.building_manager,
             client_type: formData.client_type,
             is_active: true,
-          })
-          .select()
-          .single();
+          });
 
-        if (error) {
-          console.error('Client insert error:', error);
-          alert('Erro ao criar cliente: ' + error.message);
-          return;
+        if (clientError) {
+          if (clientError.code === '42501') {
+            throw new Error("Erro 403: Permissão negada. Verifique as Políticas (RLS) da tabela 'clients' no Supabase.");
+          }
+          throw clientError;
         }
 
-        if (data) {
-          setClients([data, ...clients]);
-          alert('Cliente criado com sucesso!');
-        }
+        alert('Cliente criado com sucesso!');
       }
 
       closeModal();
-      loadClients();
+      await loadClients();
     } catch (error: any) {
-      console.error('Error saving client:', error);
-      alert('Erro ao salvar cliente: ' + (error.message || 'Erro desconhecido'));
+      console.error('Erro operacional:', error);
+      alert(error.message || 'Erro ao salvar cliente');
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -169,7 +179,9 @@ export function ClientManagement() {
   const handleDelete = async (id: string) => {
     if (!confirm('Tem certeza que deseja excluir este cliente?')) return;
     const { error } = await supabase.from('clients').delete().eq('id', id);
-    if (!error) {
+    if (error) {
+      alert("Erro ao excluir: " + error.message);
+    } else {
       setClients(clients.filter((c) => c.id !== id));
     }
   };
@@ -281,7 +293,7 @@ export function ClientManagement() {
         ) : (
           <div className="divide-y divide-slate-200">
             {filteredClients.map((client) => {
-              const Icon = clientTypeIcons[client.client_type];
+              const Icon = clientTypeIcons[client.client_type] || Home;
               return (
                 <div key={client.id} className="p-4 hover:bg-slate-50 transition">
                   <div className="flex items-start justify-between gap-3">
@@ -334,7 +346,7 @@ export function ClientManagement() {
                         )}
                         <div className="flex items-center gap-2 sm:gap-3 mt-2">
                           <span className="text-xs px-2 py-0.5 sm:py-1 bg-slate-100 text-slate-600 rounded-full">
-                            {CLIENT_TYPE_CONFIG[client.client_type].label}
+                            {CLIENT_TYPE_CONFIG[client.client_type]?.label || 'Cliente'}
                           </span>
                           <span className="text-xs text-slate-400 hidden sm:inline">
                             Desde {formatDate(client.created_at)}
@@ -423,11 +435,9 @@ export function ClientManagement() {
                       </div>
                     )}
                   </div>
-                  <p className="text-xs text-slate-500 mt-1">
-                    Para CNPJ, os dados serão preenchidos automaticamente
-                  </p>
                 </div>
               </div>
+              
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-2">Email *</label>
@@ -452,6 +462,7 @@ export function ClientManagement() {
                   />
                 </div>
               </div>
+
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-2">
                   Síndico / Zelador
@@ -464,6 +475,7 @@ export function ClientManagement() {
                   placeholder="Nome do síndico ou zelador do prédio"
                 />
               </div>
+
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-2">
                   Endereço Completo *
@@ -476,6 +488,7 @@ export function ClientManagement() {
                   required
                 />
               </div>
+
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-2">
                   Tipo de Cliente *
@@ -491,48 +504,42 @@ export function ClientManagement() {
                   <option value="industrial">Industrial</option>
                 </select>
               </div>
+
               {!editingClient && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
-                  <div className="sm:col-span-2">
-                    <p className="text-sm font-medium text-blue-900 mb-2">
-                      Criar acesso ao portal do cliente
-                    </p>
-                  </div>
-                  <div className="sm:col-span-2">
-                    <label className="block text-sm font-medium text-slate-700 mb-2">
-                      Senha de Acesso {!editingClient && '*'}
-                    </label>
-                    <div className="relative">
-                      <Key className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
-                      <input
-                        type="password"
-                        value={formData.password}
-                        onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                        className="w-full pl-10 pr-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none"
-                        placeholder="Mínimo 6 caracteres"
-                        minLength={6}
-                        required={!editingClient}
-                      />
-                    </div>
-                    <p className="text-xs text-slate-500 mt-1">
-                      Esta senha será usada pelo cliente para acessar o portal
-                    </p>
+                <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
+                  <p className="text-sm font-medium text-blue-900 mb-2">
+                    Criar acesso ao portal do cliente
+                  </p>
+                  <div className="relative">
+                    <Key className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+                    <input
+                      type="password"
+                      value={formData.password}
+                      onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                      className="w-full pl-10 pr-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none"
+                      placeholder="Senha (mín. 6 caracteres)"
+                      minLength={6}
+                      required={!editingClient}
+                    />
                   </div>
                 </div>
               )}
+
               <div className="flex flex-col-reverse sm:flex-row gap-3 pt-4">
                 <button
                   type="button"
                   onClick={closeModal}
+                  disabled={submitting}
                   className="flex-1 px-4 py-2 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 transition"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg transition"
+                  disabled={submitting}
+                  className="flex-1 px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg transition disabled:opacity-50"
                 >
-                  {editingClient ? 'Salvar' : 'Criar Cliente'}
+                  {submitting ? 'Salvando...' : editingClient ? 'Salvar' : 'Criar Cliente'}
                 </button>
               </div>
             </form>
