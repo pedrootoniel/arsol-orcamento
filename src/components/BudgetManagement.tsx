@@ -42,39 +42,32 @@ export function BudgetManagement() {
     setLoading(false);
   };
 
-  const createBudget = async (data: {
-    title: string;
-    client_id: string | null;
-    responsible_name: string;
-    description: string;
-    validity_date: string;
-  }) => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
+const createBudget = async (formData) => {
+  // 1. Pega o usuário logado no Supabase
+  const { data: { user } } = await supabase.auth.getUser();
 
-    const client = data.client_id ? clients.find((c) => c.id === data.client_id) : null;
+  if (!user) {
+    alert("Você precisa estar logado!");
+    return;
+  }
 
-    const { data: newBudget, error } = await supabase
-      .from('budgets')
-      .insert({
-        user_id: user.id,
-        title: data.title,
-        client_id: data.client_id,
-        client_name: client?.name || '',
-        responsible_name: data.responsible_name,
-        description: data.description,
-        validity_date: data.validity_date || null,
-        status: 'draft',
-      })
-      .select('*, clients(*)')
-      .single();
+  // 2. Insere os dados incluindo o user_id que o banco exige
+  const { data, error } = await supabase
+    .from('budgets')
+    .insert({
+      title: formData.title,
+      client_id: formData.client_id,
+      description: formData.description,
+      user_id: user.id, // <--- O CAMPO FALTANTE AQUI
+      budget_number: `ORC-${Date.now()}`, //
+      status: 'draft'
+    })
+    .select();
 
-    if (!error && newBudget) {
-      setBudgets([newBudget, ...budgets]);
-      setShowNewBudget(false);
-      setSelectedBudgetId(newBudget.id);
-    }
-  };
+  if (error) {
+    console.error("Erro ao criar:", error.message);
+  }
+};
 
   const filteredBudgets = budgets.filter((b) => {
     const matchesSearch =

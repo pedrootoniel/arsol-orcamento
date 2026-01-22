@@ -120,20 +120,29 @@ export function BudgetEditor({ budgetId, onBack, readOnly = false }: Props) {
     }
   };
 
-  const addItem = async (item: {
-    description: string;
-    quantity: number;
-    unit: string;
-    unit_price: number;
-    category: ItemCategory;
-    technical_specs: Record<string, string>;
-  }) => {
-    const { data, error } = await supabase
-      .from('budget_items')
-      .insert({
-        budget_id: budgetId,
-        ...item,
-      })
+const addItem = async (item) => {
+  const { data: { user } } = await supabase.auth.getUser();
+  
+  if (!user) {
+    alert("Sessão expirada. Faça login novamente.");
+    return;
+  }
+
+  // Calculando o total_price explicitamente para evitar erro 400
+  const totalPrice = item.quantity * item.unit_price;
+
+  const { data, error } = await supabase
+    .from('budget_items')
+    .insert({
+      budget_id: budgetId,
+      description: item.description,
+      quantity: item.quantity,    // Verifique se no banco é 'quantity' ou 'quant'
+      unit: item.unit,
+      unit_price: item.unit_price,
+      total_price: totalPrice,    // Campo obrigatório visto no print
+      category: item.category,
+      // Se houver campos técnicos, certifique-se que o banco aceita JSONB
+    })
       .select()
       .single();
 
